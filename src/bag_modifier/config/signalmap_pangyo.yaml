@@ -1,0 +1,162 @@
+# Summary
+Summary:
+  - TotalNum: 10
+  - SignalgroupInfo:
+    "SSR1":
+      Type: 0
+      DrivingDirection: "N"
+    "SSR2":
+      Type: 0
+      DrivingDirection: "E"
+    "SSR3":
+      Type: 0
+      DrivingDirection: "S"
+    "SSR4":
+      Type: 0
+      DrivingDirection: "W"
+  - Duration:
+    Type: 0
+    Offset: 0
+
+# SignalMap
+SignalMap:
+  1:
+    SSR1:
+      A: "0"
+      B: "10"
+    SSR2:
+      A: "0"
+      B: "0"
+    SSR3:
+      A: "10"
+      B: "0"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (46, 0, 0)
+  2:
+    SSR1:
+      A: "0"
+      B: "10"
+    SSR2:
+      A: "0"
+      B: "0"
+    SSR3:
+      A: "20"
+      B: "0"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (4, 0, 0)
+  3:
+    SSR1:
+      A: "0"
+      B: "10"
+    SSR2:
+      A: "01"
+      B: "0"
+    SSR3:
+      A: "0"
+      B: "0"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (16, 0, 0)
+  4:
+    SSR1:
+      A: "0"
+      B: "20"
+    SSR2:
+      A: "02"
+      B: "0"
+    SSR3:
+      A: "0"
+      B: "0"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (4, 0, 0)
+  5:
+    SSR1:
+      A: "0"
+      B: "0"
+    SSR2:
+      A: "0"
+      B: "0"
+    SSR3:
+      A: "0"
+      B: "0"
+    SSR4:
+      A: "10"
+      B: "01"
+    Duration: (27, 0, 0)
+  6:
+    SSR1:
+      A: "0"
+      B: "0"
+    SSR2:
+      A: "0"
+      B: "0"
+    SSR3:
+      A: "0"
+      B: "0"
+    SSR4:
+      A: "20"
+      B: "02"
+    Duration: (3, 0, 0)
+  7:
+    SSR1:
+      A: "0"
+      B: "0"
+    SSR2:
+      A: "10"
+      B: "01"
+    SSR3:
+      A: "0"
+      B: "0"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (27, 0, 0)
+  8:
+    SSR1:
+      A: "0"
+      B: "0"
+    SSR2:
+      A: "20"
+      B: "02"
+    SSR3:
+      A: "0"
+      B: "0"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (3, 0, 0)
+  9:
+    SSR1:
+      A: "0"
+      B: "0"
+    SSR2:
+      A: "0"
+      B: "0"
+    SSR3:
+      A: "10"
+      B: "01"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (16, 0, 0)
+  10:
+    SSR1:
+      A: "0"
+      B: "0"
+    SSR2:
+      A: "0"
+      B: "0"
+    SSR3:
+      A: "20"
+      B: "02"
+    SSR4:
+      A: "0"
+      B: "0"
+    Duration: (4, 0, 0)
