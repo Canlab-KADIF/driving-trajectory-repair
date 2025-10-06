@@ -1,0 +1,59 @@
+ros-bag-modifier
+Copyright 2026 Korea Electronics Technology Institute (KETI)
+
+This product includes software developed at
+Korea Electronics Technology Institute (https://www.keti.re.kr).
+
+--------------------------------------------------------------------------------
+Funding acknowledgement
+--------------------------------------------------------------------------------
+
+This work was supported by the Institute of Information & Communications
+Technology Planning & Evaluation (IITP) grant funded by the Korea government
+(MSIT) (No. RS-2023-00232046, Development of Cloud-based Cause Analysis
+Technology via Abnormal Driving Data Transmission).
+
+본 연구는 과학기술정보통신부 및 정보통신기획평가원의 자율주행기술개발혁신사업의
+지원을 받아 수행된 연구임 (RS-2023-00232046, 비정상 주행 데이터 전송을 통한
+클라우드 기반 원인 분석 기술 개발).
+
+--------------------------------------------------------------------------------
+Third-party notices
+--------------------------------------------------------------------------------
+
+No third-party source code is vendored into this repository. The notices below
+cover libraries this software links against or interfaces with at build time.
+
+* Robot Operating System (ROS 1 Noetic) — roscpp, rosbag, tf, message packages
+  Copyright (c) Open Source Robotics Foundation and contributors
+  Licensed under the BSD 3-Clause License.
+
+* Eigen
+  Copyright (c) Benoit Jacob, Gael Guennebaud and contributors
+  Licensed under the Mozilla Public License 2.0.
+
+* jsk_recognition_msgs (used by the visualisation nodes)
+  Copyright (c) JSK Lab, The University of Tokyo
+  Licensed under the BSD 3-Clause License.
+
+* Quadratic-programming spline solver
+  The class `SplineSolver` in this repository is a thin wrapper around
+  `OsqpSpline2dSolver`, provided by an internal KETI planning library that is
+  not distributed with this repository. That solver's public interface
+  (`Spline2dSolver`, `Spline2dConstraint`, `Spline2dKernel`) follows the design
+  of the smoothing-spline module of Baidu Apollo
+  (https://github.com/ApolloAuto/apollo), which is licensed under the
+  Apache License 2.0. Anyone redistributing that solver together with this
+  software should verify its provenance and reproduce the corresponding
+  upstream copyright notice.
+
+--------------------------------------------------------------------------------
+Removed dependency
+--------------------------------------------------------------------------------
+
+Earlier revisions of this software computed oriented-bounding-box overlap with
+CGAL (Computational Geometry Algorithms Library). CGAL's Boolean set operations
+are distributed under the GNU General Public License, which is incompatible
+with the Apache License 2.0 used here. That dependency has been removed and
+replaced by an internal convex-polygon implementation
+(`include/bag_modifier/geometry/polygon_iou.h`).

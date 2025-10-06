@@ -1,0 +1,29 @@
+# catkin / ROS build artifacts
+build/
+devel/
+install/
+logs/
+log/
+.catkin_tools/
+*.pyc
+__pycache__/
+*.egg-info/
+
+# recorded data (never commit bags or extracted frames)
+*.bag
+*.bag.active
+*.db3
+*.mcap
+*.pcd
+*.pcap
+
+# editor and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# local overrides
+*.local.yaml
+compile_commands.json
