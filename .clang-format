@@ -1,0 +1,21 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+Standard: c++14
+ColumnLimit: 80
+DerivePointerAlignment: false
+PointerAlignment: Left
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<[a-z_]+\.h>$'
+    Priority: 2
+  - Regex: '^<[a-z_]+>$'
+    Priority: 3
+  - Regex: '^<(Eigen|pcl|ros|opencv2|boost)/'
+    Priority: 4
+  - Regex: '^<'
+    Priority: 4
+  - Regex: '^"'
+    Priority: 5
+SortIncludes: true
+AllowShortFunctionsOnASingleLine: Inline
