@@ -25,9 +25,9 @@ namespace bag_modifier {
 // Two-dimensional vector in the map (UTM) plane.
 //
 // This type exists so that the package stays free of any external computational
-// geometry library. See docs in README: the original implementation linked CGAL,
-// which is distributed under the GPL and is therefore incompatible with the
-// Apache-2.0 license of this repository.
+// geometry library. See docs in README: the original implementation linked
+// CGAL, which is distributed under the GPL and is therefore incompatible with
+// the Apache-2.0 license of this repository.
 class Vec2d {
  public:
   Vec2d() = default;

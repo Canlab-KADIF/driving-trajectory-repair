@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include "bag_modifier/track/obstacle_pose_estimator.h"
+#include <cmath>
 
 #include <gtest/gtest.h>
 
-#include <cmath>
-
 #include "bag_modifier/geometry/angle_math.h"
+#include "bag_modifier/track/obstacle_pose_estimator.h"
 
 namespace keti {
 namespace kadif {
@@ -111,8 +110,8 @@ TEST(ObstaclePoseEstimator, PredictsPedestriansLinearly) {
     estimator.AddSample(MakeSample(4, i * 0.1, i * 0.15, 0.0, i * 0.2, 1.5, 0.0,
                                    ObstacleClass::kPedestrian));
   }
-  const ObstacleSample last = MakeSample(4, 0.4, 0.6, 0.0, 0.8, 1.5, 0.0,
-                                         ObstacleClass::kPedestrian);
+  const ObstacleSample last =
+      MakeSample(4, 0.4, 0.6, 0.0, 0.8, 1.5, 0.0, ObstacleClass::kPedestrian);
 
   Box2d box;
   double speed = 0.0;
@@ -163,11 +162,11 @@ TEST(ObstaclePoseEstimator, PredictsATurnAlongTheCtrvCircle) {
 
   const double last_t = 4 * kDt;
   const double last_theta = kYawRate * last_t;
-  const ObstacleSample last = MakeSample(
-      6, last_t, kRadius * std::sin(last_theta),
-      kRadius * (1.0 - std::cos(last_theta)), last_theta,
-      kSpeed * std::cos(last_theta), kSpeed * std::sin(last_theta),
-      ObstacleClass::kVehicle);
+  const ObstacleSample last =
+      MakeSample(6, last_t, kRadius * std::sin(last_theta),
+                 kRadius * (1.0 - std::cos(last_theta)), last_theta,
+                 kSpeed * std::cos(last_theta), kSpeed * std::sin(last_theta),
+                 ObstacleClass::kVehicle);
 
   Box2d box;
   double speed = 0.0;

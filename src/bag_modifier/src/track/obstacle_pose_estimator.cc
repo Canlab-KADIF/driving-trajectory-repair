@@ -57,7 +57,9 @@ bool ObstaclePoseEstimator::HasHistory(int track_id) const {
   return history_.find(track_id) != history_.end();
 }
 
-void ObstaclePoseEstimator::Clear() { history_.clear(); }
+void ObstaclePoseEstimator::Clear() {
+  history_.clear();
+}
 
 double ObstaclePoseEstimator::AverageSpeed(
     const std::deque<ObstacleSample>& history) const {
@@ -92,9 +94,8 @@ bool ObstaclePoseEstimator::Estimate(const ObstacleSample& last_seen,
   const ObstacleSample& newest = track.back();
   const double history_span = newest.timestamp - oldest.timestamp;
   const double yaw_rate =
-      history_span > 0.0
-          ? AngleDiff(oldest.theta, newest.theta) / history_span
-          : 0.0;
+      history_span > 0.0 ? AngleDiff(oldest.theta, newest.theta) / history_span
+                         : 0.0;
 
   const double dt = time - last_seen.timestamp;
 

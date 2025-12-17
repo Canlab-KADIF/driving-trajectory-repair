@@ -20,21 +20,19 @@
 // Point it at the interpolated-only output of the offline tool to see just the
 // synthesised poses, or at the full repaired stream to see them in context.
 
-#include <ros/ros.h>
-
 #include <cmath>
 #include <string>
 
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
+#include <ros/ros.h>
 #include <tf/tf.h>
 #include <visualization_msgs/MarkerArray.h>
-
-#include "cyber_perception_msgs/PerceptionObstacle.h"
-#include "cyber_perception_msgs/PerceptionObstacles.h"
 
 #include "bag_modifier/geometry/box2d.h"
 #include "bag_modifier/geometry/vec2d.h"
 #include "bag_modifier/viz/marker_style.h"
+#include "cyber_perception_msgs/PerceptionObstacle.h"
+#include "cyber_perception_msgs/PerceptionObstacles.h"
 
 namespace keti {
 namespace kadif {
@@ -187,15 +185,14 @@ void RepairedBagVisualizer::OnObstacles(
         MakeArrow(frame_id_, stamp, MarkerId(obstacle.id, kMarkerSlotArrow), x,
                   y, obstacle.theta, kHeadingArrowLength, color));
 
-    const double speed =
-        std::sqrt(obstacle.velocity.x * obstacle.velocity.x +
-                  obstacle.velocity.y * obstacle.velocity.y +
-                  obstacle.velocity.z * obstacle.velocity.z);
+    const double speed = std::sqrt(obstacle.velocity.x * obstacle.velocity.x +
+                                   obstacle.velocity.y * obstacle.velocity.y +
+                                   obstacle.velocity.z * obstacle.velocity.z);
     if (speed > 0.0) {
       const Vec2d velocity(obstacle.velocity.x, obstacle.velocity.y);
-      velocity_arrows.markers.push_back(
-          MakeArrow(frame_id_, stamp, obstacle.id, x, y, velocity.Angle(),
-                    speed, MakeColor(1.0f, 1.0f, 0.0f)));
+      velocity_arrows.markers.push_back(MakeArrow(frame_id_, stamp, obstacle.id,
+                                                  x, y, velocity.Angle(), speed,
+                                                  MakeColor(1.0f, 1.0f, 0.0f)));
     }
 
     const double acceleration_magnitude =
@@ -205,10 +202,10 @@ void RepairedBagVisualizer::OnObstacles(
     if (acceleration_magnitude > 0.0) {
       const Vec2d acceleration(obstacle.acceleration.x,
                                obstacle.acceleration.y);
-      acceleration_arrows.markers.push_back(MakeArrow(
-          frame_id_, stamp, obstacle.id, x, y, acceleration.Angle(),
-          acceleration_magnitude * kAccelerationArrowGain,
-          MakeColor(1.0f, 0.0f, 0.0f)));
+      acceleration_arrows.markers.push_back(
+          MakeArrow(frame_id_, stamp, obstacle.id, x, y, acceleration.Angle(),
+                    acceleration_magnitude * kAccelerationArrowGain,
+                    MakeColor(1.0f, 0.0f, 0.0f)));
     }
   }
 

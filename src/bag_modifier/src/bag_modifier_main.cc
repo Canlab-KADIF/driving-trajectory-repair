@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <ros/ros.h>
-
 #include <iostream>
 #include <string>
+
+#include <ros/ros.h>
 
 #include "bag_modifier/bag_rewriter.h"
 
@@ -39,8 +39,7 @@ void PrintUsage(const char* program_name) {
 // Reads a parameter from the private namespace, keeping the value already in
 // `value` when the parameter is not set.
 template <typename T>
-void LoadParam(const ros::NodeHandle& node, const std::string& name,
-               T* value) {
+void LoadParam(const ros::NodeHandle& node, const std::string& name, T* value) {
   T loaded;
   if (node.getParam(name, loaded)) {
     *value = loaded;

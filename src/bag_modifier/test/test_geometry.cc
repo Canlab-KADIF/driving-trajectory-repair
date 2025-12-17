@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-
 #include <cmath>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "bag_modifier/geometry/angle_math.h"
 #include "bag_modifier/geometry/box2d.h"

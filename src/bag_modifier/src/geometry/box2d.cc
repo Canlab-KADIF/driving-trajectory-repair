@@ -73,8 +73,8 @@ bool Box2d::HasOverlap(const Box2d& other) const {
   const Vec2d center_offset = other.center() - center_;
   for (const Vec2d& axis : axes) {
     const double gap = std::fabs(center_offset.DotProduct(axis));
-    if (gap > ProjectedHalfExtent(*this, axis) +
-                  ProjectedHalfExtent(other, axis)) {
+    if (gap >
+        ProjectedHalfExtent(*this, axis) + ProjectedHalfExtent(other, axis)) {
       return false;
     }
   }

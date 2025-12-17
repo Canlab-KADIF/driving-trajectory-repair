@@ -36,7 +36,9 @@ inline double AngleDiff(double from, double to) {
   return NormalizeAngle(to - from);
 }
 
-inline double Square(double value) { return value * value; }
+inline double Square(double value) {
+  return value * value;
+}
 
 }  // namespace bag_modifier
 }  // namespace kadif

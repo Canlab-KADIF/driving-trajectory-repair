@@ -16,10 +16,10 @@
 
 #include "bag_modifier/bag_rewriter.h"
 
-#include <rosbag/view.h>
-
 #include <cmath>
 #include <iostream>
+
+#include <rosbag/view.h>
 
 #include "cyber_perception_msgs/PerceptionObstacles.h"
 

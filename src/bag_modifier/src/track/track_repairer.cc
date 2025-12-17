@@ -59,7 +59,8 @@ const cyber_perception_msgs::PerceptionObstacle* FindObstacle(
 }  // namespace
 
 bool TrackRepairer::Init(const TrackRepairerInitOptions& options) {
-  if (options.reidentification_window <= 0.0 || options.max_speed_error <= 0.0) {
+  if (options.reidentification_window <= 0.0 ||
+      options.max_speed_error <= 0.0) {
     std::cerr << "invalid TrackRepairer options" << std::endl;
     return false;
   }
@@ -133,12 +134,11 @@ void TrackRepairer::UpdateTracks(
   // Tracks reported for the first time
   for (const cyber_perception_msgs::PerceptionObstacle& obstacle :
        obstacles.perception_obstacle) {
-    const bool already_tracked =
-        std::any_of(tracked_obstacles_.begin(), tracked_obstacles_.end(),
-                    [&obstacle](
-                        const cyber_perception_msgs::PerceptionObstacle& kept) {
-                      return kept.id == obstacle.id;
-                    });
+    const bool already_tracked = std::any_of(
+        tracked_obstacles_.begin(), tracked_obstacles_.end(),
+        [&obstacle](const cyber_perception_msgs::PerceptionObstacle& kept) {
+          return kept.id == obstacle.id;
+        });
     if (already_tracked) {
       continue;
     }
@@ -210,8 +210,7 @@ void TrackRepairer::MatchNewTracks(
       candidate.new_id = obstacle.id;
       candidate.disappeared_id = track.last_message.id;
       // The frame before the track went missing still contains its last pose
-      candidate.start_index =
-          track.frame_index > 0 ? track.frame_index - 1 : 0;
+      candidate.start_index = track.frame_index > 0 ? track.frame_index - 1 : 0;
       candidate.end_index = frame_index;
       candidate.similarity =
           iou + options_.heading_similarity_weight * heading_similarity +
@@ -295,8 +294,8 @@ bool TrackRepairer::InterpolateGaps() {
     const double end_angle = end_obstacle->theta;
     const double heading_change = AngleDiff(start_angle, end_angle);
 
-    const bool is_pedestrian =
-        ToObstacleClass(start_obstacle->type.type) == ObstacleClass::kPedestrian;
+    const bool is_pedestrian = ToObstacleClass(start_obstacle->type.type) ==
+                               ObstacleClass::kPedestrian;
     const bool is_straight =
         std::fabs(heading_change) <= kStraightHeadingTolerance || is_pedestrian;
 
@@ -315,9 +314,8 @@ bool TrackRepairer::InterpolateGaps() {
     }
 
     // Travelling opposite to where the object is pointing means it reversed
-    const bool is_reverse =
-        std::fabs(AngleDiff(segment.Angle(), start_angle)) >
-        kReverseHeadingThreshold;
+    const bool is_reverse = std::fabs(AngleDiff(segment.Angle(), start_angle)) >
+                            kReverseHeadingThreshold;
     if (is_reverse) {
       speed = -speed;
     }
@@ -332,8 +330,9 @@ bool TrackRepairer::InterpolateGaps() {
     control_points.emplace_back(Vec2d(0.0, 0.0), 0.0, tangent_of(start_angle));
 
     for (std::size_t i = match.start_index + 1; i < match.end_index; ++i) {
-      const double dt = repaired_frames_[i].obstacles.cyber_header.timestamp_sec -
-                        start_frame.obstacles.cyber_header.timestamp_sec;
+      const double dt =
+          repaired_frames_[i].obstacles.cyber_header.timestamp_sec -
+          start_frame.obstacles.cyber_header.timestamp_sec;
 
       double dx = 0.0;
       double dy = 0.0;
@@ -350,9 +349,9 @@ bool TrackRepairer::InterpolateGaps() {
       }
 
       const Vec2d control_point(dx, dy);
-      const double s = control_points.back().s +
-                       (control_point - control_points.back().control_point)
-                           .Length();
+      const double s =
+          control_points.back().s +
+          (control_point - control_points.back().control_point).Length();
       control_points.emplace_back(
           control_point, s,
           tangent_of(NormalizeAngle(start_angle + angular_velocity * dt)));
@@ -372,8 +371,9 @@ bool TrackRepairer::InterpolateGaps() {
 
     const double scale = control_points.back().s;
     for (std::size_t i = match.start_index + 1; i < match.end_index; ++i) {
-      const double dt = repaired_frames_[i].obstacles.cyber_header.timestamp_sec -
-                        start_frame.obstacles.cyber_header.timestamp_sec;
+      const double dt =
+          repaired_frames_[i].obstacles.cyber_header.timestamp_sec -
+          start_frame.obstacles.cyber_header.timestamp_sec;
       const double t = control_points[i - match.start_index].s / scale;
       const Vec2d point = spline_solver_.Evaluate(t);
 
@@ -383,8 +383,7 @@ bool TrackRepairer::InterpolateGaps() {
       interpolated.position.x = point.x() + start_point.x();
       interpolated.position.y = point.y() + start_point.y();
       interpolated.position.z = start_obstacle->position.z;
-      interpolated.theta =
-          NormalizeAngle(start_angle + angular_velocity * dt);
+      interpolated.theta = NormalizeAngle(start_angle + angular_velocity * dt);
       interpolated.velocity.x =
           speed * std::cos(start_angle + angular_velocity * dt);
       interpolated.velocity.y =

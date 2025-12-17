@@ -23,12 +23,11 @@
 
 #include <ros/time.h>
 
-#include "cyber_perception_msgs/PerceptionObstacle.h"
-#include "cyber_perception_msgs/PerceptionObstacles.h"
-
 #include "bag_modifier/spline/spline_solver.h"
 #include "bag_modifier/track/obstacle_pose_estimator.h"
 #include "bag_modifier/track/obstacle_sample.h"
+#include "cyber_perception_msgs/PerceptionObstacle.h"
+#include "cyber_perception_msgs/PerceptionObstacles.h"
 
 namespace keti {
 namespace kadif {

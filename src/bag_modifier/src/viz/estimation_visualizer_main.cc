@@ -21,8 +21,6 @@
 // motion model can be checked against the recorded scene in rviz before a bag
 // is rewritten.
 
-#include <ros/ros.h>
-
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -30,15 +28,15 @@
 #include <vector>
 
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
+#include <ros/ros.h>
 #include <visualization_msgs/MarkerArray.h>
-
-#include "cyber_perception_msgs/PerceptionObstacle.h"
-#include "cyber_perception_msgs/PerceptionObstacles.h"
 
 #include "bag_modifier/geometry/box2d.h"
 #include "bag_modifier/ros/obstacle_conversion.h"
 #include "bag_modifier/track/obstacle_pose_estimator.h"
 #include "bag_modifier/viz/marker_style.h"
+#include "cyber_perception_msgs/PerceptionObstacle.h"
+#include "cyber_perception_msgs/PerceptionObstacles.h"
 
 namespace keti {
 namespace kadif {
@@ -196,8 +194,7 @@ void EstimationVisualizer::DrawEstimates(
 void EstimationVisualizer::UpdateTracks(
     const cyber_perception_msgs::PerceptionObstacles& obstacles,
     double timestamp) {
-  for (auto it = tracked_obstacles_.begin();
-       it != tracked_obstacles_.end();) {
+  for (auto it = tracked_obstacles_.begin(); it != tracked_obstacles_.end();) {
     const auto found = std::find_if(
         obstacles.perception_obstacle.begin(),
         obstacles.perception_obstacle.end(),

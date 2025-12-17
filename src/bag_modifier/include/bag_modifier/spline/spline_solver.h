@@ -61,7 +61,8 @@ struct SplineSolverInitOptions {
 
   // Relative weights of the smoothness terms in the cost function. Penalising
   // the third derivative far more than the second favours a curve with slowly
-  // changing curvature, which looks like a driven line rather than a fitted one.
+  // changing curvature, which looks like a driven line rather than a fitted
+  // one.
   double second_derivative_weight = 200.0;
   double third_derivative_weight = 1000.0;
   double regularization_weight = 1.0e-5;

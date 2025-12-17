@@ -59,10 +59,9 @@ constexpr std::array<const char*, 6> kObstacleTypeNames = {{
 }  // namespace
 
 std_msgs::ColorRGBA CategoryColor(int index) {
-  const std::size_t slot =
-      static_cast<std::size_t>(((index % kCategoryPalette.size()) +
-                                kCategoryPalette.size()) %
-                               kCategoryPalette.size());
+  const std::size_t slot = static_cast<std::size_t>(
+      ((index % kCategoryPalette.size()) + kCategoryPalette.size()) %
+      kCategoryPalette.size());
   const Rgb& rgb = kCategoryPalette[slot];
 
   std_msgs::ColorRGBA color;
