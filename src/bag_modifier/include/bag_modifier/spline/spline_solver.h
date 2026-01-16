@@ -16,26 +16,18 @@
 
 #pragma once
 
-#include <memory>
+#include <cstddef>
 #include <vector>
 
-#include "bag_modifier/geometry/vec2d.h"
+#include <Eigen/Dense>
 
-// Forward declaration of the quadratic-programming spline solver supplied by
-// the internal KETI planning library. Keeping it out of this header means the
-// heavy solver headers are only pulled into spline_solver.cc, and the rest of
-// the package compiles without them. See README for how to obtain the library.
-namespace keti {
-namespace planning {
-class Spline2dSolver;
-}  // namespace planning
-}  // namespace keti
+#include "bag_modifier/geometry/vec2d.h"
 
 namespace keti {
 namespace kadif {
 namespace bag_modifier {
 
-// One anchor the fitted curve has to pass through or stay close to.
+// One anchor the fitted curve should pass through or stay close to.
 // `s` is the arc length from the first point, `angle` the desired tangent.
 struct SplineControlPoint {
   SplineControlPoint() = default;
@@ -48,36 +40,53 @@ struct SplineControlPoint {
 };
 
 struct SplineSolverInitOptions {
-  // Degree of each polynomial segment. Fifth order keeps curvature continuous
-  // across the joint, which a lower order would not.
-  int order = 5;
+  // Number of polynomial segments the curve is built from. More segments
+  // follow the control points more closely and smooth less.
+  std::size_t segment_count = 8;
 
-  // Corridor half-width, in metres, that intermediate control points may be
-  // displaced by. The endpoints are pinned far more tightly because they are
-  // actual perception measurements, not interpolated guesses.
-  double lateral_bound = 0.7;
-  double endpoint_bound = 0.001;
-  double longitudinal_bound = 0.001;
+  // Weight of the fit against the smoothness terms. The endpoints are not
+  // weighted, they are hard constraints, so this only governs how closely the
+  // interior control points are followed. Lower means smoother.
+  double fit_weight = 1.0;
 
-  // Relative weights of the smoothness terms in the cost function. Penalising
-  // the third derivative far more than the second favours a curve with slowly
-  // changing curvature, which looks like a driven line rather than a fitted
-  // one.
-  double second_derivative_weight = 200.0;
-  double third_derivative_weight = 1000.0;
-  double regularization_weight = 1.0e-5;
+  // Penalties on the curvature and its rate of change, kept at the 1:5 ratio
+  // the previous quadratic program used. Penalising the third difference far
+  // more than the second favours a curve whose curvature changes slowly, which
+  // looks like a driven line rather than a fitted one.
+  //
+  // The magnitudes are calibrated for this formulation, where the penalty acts
+  // on finite differences of the coefficients rather than on an integrated
+  // derivative matrix, so they are not the numbers the old solver used. At
+  // these values a 20 m arc is followed to about 3 mm while 30 cm of noise on
+  // the interior control points is rejected rather than tracked.
+  double second_derivative_weight = 0.2;
+  double third_derivative_weight = 1.0;
+
+  // Keeps the normal equations invertible when the control points are nearly
+  // collinear and the penalties alone leave a null space.
+  double regularization_weight = 1.0e-6;
 };
 
-// Fits a smooth 2D curve through a sequence of control points by solving a
-// quadratic program.
+// Fits a smooth 2D curve through a sequence of control points.
 //
 // Used to bridge the gap between the last pose of a track that perception lost
 // and the first pose of the track it was re-identified as, so that the repaired
 // trajectory does not contain a straight-line jump.
+//
+// The curve is a uniform cubic B-spline, fitted by penalised least squares:
+// the interior control points are followed as data, the curvature and its rate
+// of change are penalised, and the two endpoints are pinned exactly in both
+// position and tangent direction because they are real detections rather than
+// interpolated guesses. Cubic keeps the curvature continuous across segment
+// joints, which is what the repaired trajectory needs.
+//
+// Earlier revisions delegated this to a quadratic-programming solver from an
+// internal planning library, which could also impose a corridor around each
+// interior point. That library is not publicly distributed, so the corridor
+// became a least-squares weight and the dependency was dropped.
 class SplineSolver {
  public:
-  SplineSolver();
-  ~SplineSolver();
+  SplineSolver() = default;
 
   SplineSolver(const SplineSolver&) = delete;
   SplineSolver& operator=(const SplineSolver&) = delete;
@@ -87,24 +96,43 @@ class SplineSolver {
   void SetSplineControlPoints(
       const std::vector<SplineControlPoint>& control_points) {
     control_points_ = control_points;
+    solved_ = false;
   }
 
   // Solves for the curve through the control points set previously.
-  // Returns false when the problem is infeasible, in which case the caller
+  // Returns false when the problem is degenerate, in which case the caller
   // should leave the trajectory unrepaired rather than emit a bad one.
   bool Solve();
 
   // Evaluates the fitted curve at normalised arc length t in [0, 1].
-  // Only valid after a successful Solve().
+  // Only meaningful after a successful Solve().
   Vec2d Evaluate(double t) const;
 
+  // Tangent direction at t, in radians. Exposed for verification.
+  double EvaluateHeading(double t) const;
+
  private:
-  bool AddConstraints();
-  void AddKernel();
+  std::size_t CoefficientCount() const { return options_.segment_count + 3; }
+
+  // Locates t in the uniform knot sequence and returns the index of the first
+  // of the four coefficients that influence it, plus the local parameter.
+  void LocateSegment(double t, std::size_t* first_coefficient,
+                     double* local_t) const;
+
+  // Row of the design matrix at t: the four non-zero basis values, placed at
+  // the coefficients they belong to. `derivative` selects the basis (0, 1).
+  Eigen::RowVectorXd BasisRow(double t, int derivative) const;
+
+  // Finite-difference operator of the given order over the coefficients.
+  Eigen::MatrixXd DifferenceMatrix(int order) const;
 
   SplineSolverInitOptions options_;
-  std::unique_ptr<keti::planning::Spline2dSolver> solver_;
   std::vector<SplineControlPoint> control_points_;
+
+  // Coefficients of the x and y curves, stacked as [cx; cy]
+  Eigen::VectorXd coefficients_;
+  bool initialized_ = false;
+  bool solved_ = false;
 };
 
 }  // namespace bag_modifier
