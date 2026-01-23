@@ -1,12 +1,13 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>bag_modifier</name>
-  <version>1.0.0</version>
+  <version>2.0.0</version>
   <description>
-    Offline repair of broken object-tracking trajectories in recorded ROS bags.
-    Re-identifies perception tracks that were dropped and re-issued under a new
-    id, and fills the gap with spline-interpolated poses, so that a recording
-    can be replayed as a continuous driving scenario.
+    Offline repair of broken object-tracking trajectories in recorded ROS 2
+    bags. Re-identifies perception tracks that were dropped and re-issued under
+    a new id, and fills the gap with spline-interpolated poses, so that a
+    recording can be replayed as a continuous driving scenario.
   </description>
 
   <maintainer email="youngbo.shim@keti.re.kr">Youngbo Shim</maintainer>
@@ -16,27 +17,27 @@
   <url type="repository">https://github.com/keti-mobility/ros-bag-modifier</url>
   <url type="bugtracker">https://github.com/keti-mobility/ros-bag-modifier/issues</url>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>roscpp</depend>
-  <depend>rosbag</depend>
-  <depend>tf</depend>
+  <depend>rclcpp</depend>
+  <depend>rosbag2_cpp</depend>
+  <depend>rosbag2_storage</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>builtin_interfaces</depend>
   <depend>visualization_msgs</depend>
-
-  <!-- Visualisation only: the offline tool builds without it -->
-  <depend>jsk_recognition_msgs</depend>
+  <depend>eigen</depend>
 
   <!--
-    Not publicly distributed. cyber_perception_msgs carries the recorded
-    perception stream; utils and planner provide the quadratic-programming
-    spline solver. See the Dependencies section of README.md for the message
-    field layout, so an equivalent package can be defined locally.
+    Not publicly distributed: cyber_perception_msgs carries the recorded
+    perception stream. See the Dependencies section of README.md for the
+    message field layout, so an equivalent package can be defined locally.
   -->
   <depend>cyber_perception_msgs</depend>
-  <depend>utils</depend>
-  <depend>planner</depend>
 
-  <test_depend>rosunit</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

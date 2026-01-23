@@ -42,12 +42,12 @@ constexpr double kReverseHeadingThreshold = M_PI * 5.0 / 6.0;
 // Guards the id chain rewrite against a cycle in the match table.
 constexpr int kMaxIdChainLength = 64;
 
-const cyber_perception_msgs::PerceptionObstacle* FindObstacle(
-    const cyber_perception_msgs::PerceptionObstacles& obstacles, int id) {
+const cyber_perception_msgs::msg::PerceptionObstacle* FindObstacle(
+    const cyber_perception_msgs::msg::PerceptionObstacles& obstacles, int id) {
   const auto found = std::find_if(
       obstacles.perception_obstacle.begin(),
       obstacles.perception_obstacle.end(),
-      [id](const cyber_perception_msgs::PerceptionObstacle& candidate) {
+      [id](const cyber_perception_msgs::msg::PerceptionObstacle& candidate) {
         return candidate.id == id;
       });
   if (found == obstacles.perception_obstacle.end()) {
@@ -79,8 +79,8 @@ bool TrackRepairer::Init(const TrackRepairerInitOptions& options) {
 }
 
 bool TrackRepairer::AddFrame(
-    const ros::Time& stamp,
-    const cyber_perception_msgs::PerceptionObstacles& obstacles) {
+    std::int64_t stamp_ns,
+    const cyber_perception_msgs::msg::PerceptionObstacles& obstacles) {
   if (!initialized_) {
     std::cerr << "TrackRepairer::Init() was not called" << std::endl;
     return false;
@@ -89,31 +89,32 @@ bool TrackRepairer::AddFrame(
   const double timestamp = obstacles.cyber_header.timestamp_sec;
   const std::size_t frame_index = repaired_frames_.size();
 
-  std::vector<cyber_perception_msgs::PerceptionObstacle> new_obstacles;
+  std::vector<cyber_perception_msgs::msg::PerceptionObstacle> new_obstacles;
   UpdateTracks(obstacles, timestamp, frame_index, &new_obstacles);
   ExpireDisappearedTracks(timestamp);
   MatchNewTracks(new_obstacles, timestamp, frame_index);
 
   TimedObstacles recorded;
-  recorded.stamp = stamp;
+  recorded.stamp_ns = stamp_ns;
   recorded.obstacles = obstacles;
   repaired_frames_.push_back(recorded);
 
   // Same time base, but only the synthetic poses are added to it later
   TimedObstacles interpolated;
-  interpolated.stamp = stamp;
+  interpolated.stamp_ns = stamp_ns;
   interpolated_frames_.push_back(interpolated);
 
   return true;
 }
 
 void TrackRepairer::UpdateTracks(
-    const cyber_perception_msgs::PerceptionObstacles& obstacles,
+    const cyber_perception_msgs::msg::PerceptionObstacles& obstacles,
     double timestamp, std::size_t frame_index,
-    std::vector<cyber_perception_msgs::PerceptionObstacle>* new_obstacles) {
+    std::vector<cyber_perception_msgs::msg::PerceptionObstacle>*
+        new_obstacles) {
   // Tracks that are no longer reported become re-identification candidates
   for (auto it = tracked_obstacles_.begin(); it != tracked_obstacles_.end();) {
-    const cyber_perception_msgs::PerceptionObstacle* still_present =
+    const cyber_perception_msgs::msg::PerceptionObstacle* still_present =
         FindObstacle(obstacles, it->id);
 
     if (still_present == nullptr) {
@@ -132,11 +133,12 @@ void TrackRepairer::UpdateTracks(
   }
 
   // Tracks reported for the first time
-  for (const cyber_perception_msgs::PerceptionObstacle& obstacle :
+  for (const cyber_perception_msgs::msg::PerceptionObstacle& obstacle :
        obstacles.perception_obstacle) {
     const bool already_tracked = std::any_of(
         tracked_obstacles_.begin(), tracked_obstacles_.end(),
-        [&obstacle](const cyber_perception_msgs::PerceptionObstacle& kept) {
+        [&obstacle](
+            const cyber_perception_msgs::msg::PerceptionObstacle& kept) {
           return kept.id == obstacle.id;
         });
     if (already_tracked) {
@@ -164,7 +166,8 @@ void TrackRepairer::ExpireDisappearedTracks(double timestamp) {
 }
 
 void TrackRepairer::MatchNewTracks(
-    const std::vector<cyber_perception_msgs::PerceptionObstacle>& new_obstacles,
+    const std::vector<cyber_perception_msgs::msg::PerceptionObstacle>&
+        new_obstacles,
     double timestamp, std::size_t frame_index) {
   if (new_obstacles.empty() || disappeared_tracks_.empty()) {
     return;
@@ -172,7 +175,7 @@ void TrackRepairer::MatchNewTracks(
 
   std::vector<MatchCandidate> candidates;
 
-  for (const cyber_perception_msgs::PerceptionObstacle& obstacle :
+  for (const cyber_perception_msgs::msg::PerceptionObstacle& obstacle :
        new_obstacles) {
     const ObstacleSample new_sample = ToObstacleSample(obstacle, timestamp);
     const Box2d new_box = new_sample.ToBox();
@@ -269,9 +272,9 @@ bool TrackRepairer::InterpolateGaps() {
     const TimedObstacles& start_frame = repaired_frames_[match.start_index];
     const TimedObstacles& end_frame = repaired_frames_[match.end_index];
 
-    const cyber_perception_msgs::PerceptionObstacle* start_obstacle =
+    const cyber_perception_msgs::msg::PerceptionObstacle* start_obstacle =
         FindObstacle(start_frame.obstacles, match.matched_id);
-    const cyber_perception_msgs::PerceptionObstacle* end_obstacle =
+    const cyber_perception_msgs::msg::PerceptionObstacle* end_obstacle =
         FindObstacle(end_frame.obstacles, new_id);
     if (start_obstacle == nullptr || end_obstacle == nullptr) {
       // The pair was matched but one endpoint is not in the frame it was
@@ -377,7 +380,7 @@ bool TrackRepairer::InterpolateGaps() {
       const double t = control_points[i - match.start_index].s / scale;
       const Vec2d point = spline_solver_.Evaluate(t);
 
-      cyber_perception_msgs::PerceptionObstacle interpolated;
+      cyber_perception_msgs::msg::PerceptionObstacle interpolated;
       // The new id is used throughout; UnifyMatchedIds() collapses the pair
       interpolated.id = new_id;
       interpolated.position.x = point.x() + start_point.x();
@@ -410,8 +413,8 @@ void TrackRepairer::UnifyMatchedIds() {
 }
 
 void TrackRepairer::RewriteIds(
-    cyber_perception_msgs::PerceptionObstacles* obstacles) const {
-  for (cyber_perception_msgs::PerceptionObstacle& obstacle :
+    cyber_perception_msgs::msg::PerceptionObstacles* obstacles) const {
+  for (cyber_perception_msgs::msg::PerceptionObstacle& obstacle :
        obstacles->perception_obstacle) {
     // A track can be re-identified more than once, so follow the chain back to
     // the id perception first assigned. The bound stops a malformed table from

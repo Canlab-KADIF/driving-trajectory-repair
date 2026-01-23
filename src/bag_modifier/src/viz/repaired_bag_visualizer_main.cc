@@ -21,18 +21,18 @@
 // synthesised poses, or at the full repaired stream to see them in context.
 
 #include <cmath>
+#include <functional>
+#include <memory>
 #include <string>
 
-#include <jsk_recognition_msgs/BoundingBoxArray.h>
-#include <ros/ros.h>
-#include <tf/tf.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <rclcpp/rclcpp.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include "bag_modifier/geometry/box2d.h"
 #include "bag_modifier/geometry/vec2d.h"
 #include "bag_modifier/viz/marker_style.h"
-#include "cyber_perception_msgs/PerceptionObstacle.h"
-#include "cyber_perception_msgs/PerceptionObstacles.h"
+#include "cyber_perception_msgs/msg/perception_obstacle.hpp"
+#include "cyber_perception_msgs/msg/perception_obstacles.hpp"
 
 namespace keti {
 namespace kadif {
@@ -46,23 +46,26 @@ constexpr double kHeadingArrowLength = 5.0;
 constexpr double kAccelerationArrowGain = 3.0;
 constexpr double kArrowThickness = 0.2;
 
-visualization_msgs::Marker MakeArrow(const std::string& frame_id,
-                                     const ros::Time& stamp, int marker_id,
-                                     double x, double y, double yaw,
-                                     double length,
-                                     const std_msgs::ColorRGBA& color) {
-  visualization_msgs::Marker arrow;
+visualization_msgs::msg::Marker MakeArrow(
+    const std::string& frame_id, const builtin_interfaces::msg::Time& stamp,
+    int marker_id, double x, double y, double yaw, double length,
+    const std_msgs::msg::ColorRGBA& color) {
+  visualization_msgs::msg::Marker arrow;
   arrow.header.frame_id = frame_id;
   arrow.header.stamp = stamp;
-  arrow.type = visualization_msgs::Marker::ARROW;
-  arrow.action = visualization_msgs::Marker::ADD;
+  arrow.ns = kArrowNamespace;
+  arrow.type = visualization_msgs::msg::Marker::ARROW;
+  arrow.action = visualization_msgs::msg::Marker::ADD;
   arrow.id = marker_id;
 
   arrow.pose.position.x = x;
   arrow.pose.position.y = y;
   arrow.pose.position.z = 0.0;
-  const tf::Quaternion quaternion = tf::createQuaternionFromRPY(0.0, 0.0, yaw);
-  tf::quaternionTFToMsg(quaternion, arrow.pose.orientation);
+  // Yaw-only rotation, so the quaternion reduces to a half-angle pair
+  arrow.pose.orientation.x = 0.0;
+  arrow.pose.orientation.y = 0.0;
+  arrow.pose.orientation.z = std::sin(yaw / 2.0);
+  arrow.pose.orientation.w = std::cos(yaw / 2.0);
 
   arrow.color = color;
   arrow.scale.x = length;
@@ -71,8 +74,8 @@ visualization_msgs::Marker MakeArrow(const std::string& frame_id,
   return arrow;
 }
 
-std_msgs::ColorRGBA MakeColor(float r, float g, float b) {
-  std_msgs::ColorRGBA color;
+std_msgs::msg::ColorRGBA MakeColor(float r, float g, float b) {
+  std_msgs::msg::ColorRGBA color;
   color.r = r;
   color.g = g;
   color.b = b;
@@ -82,21 +85,22 @@ std_msgs::ColorRGBA MakeColor(float r, float g, float b) {
 
 }  // namespace
 
-class RepairedBagVisualizer {
+class RepairedBagVisualizer : public rclcpp::Node {
  public:
-  RepairedBagVisualizer() = default;
-
-  bool Init(ros::NodeHandle* node, ros::NodeHandle* private_node);
+  RepairedBagVisualizer();
 
  private:
   void OnObstacles(
-      const cyber_perception_msgs::PerceptionObstacles::ConstPtr& obstacles);
+      const cyber_perception_msgs::msg::PerceptionObstacles::SharedPtr message);
 
-  ros::Subscriber obstacle_subscriber_;
-  ros::Publisher box_publisher_;
-  ros::Publisher marker_publisher_;
-  ros::Publisher velocity_publisher_;
-  ros::Publisher acceleration_publisher_;
+  rclcpp::Subscription<cyber_perception_msgs::msg::PerceptionObstacles>::
+      SharedPtr obstacle_subscription_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      marker_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      velocity_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      acceleration_publisher_;
 
   std::string frame_id_ = "map";
   double x_offset_ = 0.0;
@@ -105,45 +109,46 @@ class RepairedBagVisualizer {
   double track_id_height_ = 1.0;
 };
 
-bool RepairedBagVisualizer::Init(ros::NodeHandle* node,
-                                 ros::NodeHandle* private_node) {
-  private_node->param("frame_id", frame_id_, frame_id_);
-  private_node->param("x_offset", x_offset_, 0.0);
-  private_node->param("y_offset", y_offset_, 0.0);
+RepairedBagVisualizer::RepairedBagVisualizer()
+    : rclcpp::Node("repaired_bag_visualizer") {
+  frame_id_ = declare_parameter("frame_id", frame_id_);
+  x_offset_ = declare_parameter("x_offset", 0.0);
+  y_offset_ = declare_parameter("y_offset", 0.0);
 
-  obstacle_subscriber_ = node->subscribe(
-      "obstacles_modified", 10, &RepairedBagVisualizer::OnObstacles, this);
-  box_publisher_ = node->advertise<jsk_recognition_msgs::BoundingBoxArray>(
-      "obstacles_vis_modified", 1);
-  marker_publisher_ = node->advertise<visualization_msgs::MarkerArray>(
-      "obstacles_vis_vel_modified", 1);
-  velocity_publisher_ =
-      node->advertise<visualization_msgs::MarkerArray>("converter_vis_vel", 1);
-  acceleration_publisher_ = node->advertise<visualization_msgs::MarkerArray>(
-      "converter_vis_accel", 1);
-  return true;
+  const rclcpp::QoS qos = rclcpp::SensorDataQoS();
+  obstacle_subscription_ =
+      create_subscription<cyber_perception_msgs::msg::PerceptionObstacles>(
+          "obstacles_modified", qos,
+          std::bind(&RepairedBagVisualizer::OnObstacles, this,
+                    std::placeholders::_1));
+
+  const rclcpp::QoS latched = rclcpp::QoS(1);
+  marker_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
+      "obstacles_vis_modified", latched);
+  velocity_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
+      "obstacles_vis_velocity", latched);
+  acceleration_publisher_ =
+      create_publisher<visualization_msgs::msg::MarkerArray>(
+          "obstacles_vis_acceleration", latched);
 }
 
 void RepairedBagVisualizer::OnObstacles(
-    const cyber_perception_msgs::PerceptionObstacles::ConstPtr& obstacles) {
-  const ros::Time stamp(obstacles->cyber_header.timestamp_sec);
+    const cyber_perception_msgs::msg::PerceptionObstacles::SharedPtr
+        obstacles) {
+  const builtin_interfaces::msg::Time stamp = rclcpp::Time(
+      static_cast<int64_t>(obstacles->cyber_header.timestamp_sec * 1e9));
 
-  jsk_recognition_msgs::BoundingBoxArray boxes;
-  boxes.header.seq = obstacles->cyber_header.sequence_num;
-  boxes.header.stamp = stamp;
-  boxes.header.frame_id = frame_id_;
-
-  visualization_msgs::MarkerArray markers;
-  visualization_msgs::MarkerArray velocity_arrows;
-  visualization_msgs::MarkerArray acceleration_arrows;
+  visualization_msgs::msg::MarkerArray markers;
+  visualization_msgs::msg::MarkerArray velocity_arrows;
+  visualization_msgs::msg::MarkerArray acceleration_arrows;
   markers.markers.push_back(MakeDeleteAllMarker(frame_id_));
   velocity_arrows.markers.push_back(MakeDeleteAllMarker(frame_id_));
   acceleration_arrows.markers.push_back(MakeDeleteAllMarker(frame_id_));
 
-  for (const cyber_perception_msgs::PerceptionObstacle& obstacle :
+  for (const cyber_perception_msgs::msg::PerceptionObstacle& obstacle :
        obstacles->perception_obstacle) {
     const int obstacle_type = static_cast<int>(obstacle.type.type);
-    const std_msgs::ColorRGBA color = CategoryColor(obstacle_type);
+    const std_msgs::msg::ColorRGBA color = CategoryColor(obstacle_type);
 
     const double x = obstacle.position.x - x_offset_;
     const double y = obstacle.position.y - y_offset_;
@@ -153,7 +158,7 @@ void RepairedBagVisualizer::OnObstacles(
 
     BoundingBoxOptions box_options;
     box_options.frame_id = frame_id_;
-    box_options.stamp = ros::Time(obstacle.timestamp);
+    box_options.stamp = stamp;
     box_options.footprint =
         Box2d(Vec2d(obstacle.position.x, obstacle.position.y), obstacle.theta,
               obstacle.length, obstacle.width);
@@ -161,8 +166,9 @@ void RepairedBagVisualizer::OnObstacles(
     box_options.z = z;
     box_options.x_offset = x_offset_;
     box_options.y_offset = y_offset_;
-    box_options.label = 2;
-    boxes.boxes.push_back(MakeBoundingBox(box_options));
+    box_options.marker_id = MarkerId(obstacle.id, kMarkerSlotArrow);
+    box_options.color = color;
+    markers.markers.push_back(MakeBoundingBox(box_options));
 
     TextMarkerOptions label_options;
     label_options.frame_id = frame_id_;
@@ -209,10 +215,9 @@ void RepairedBagVisualizer::OnObstacles(
     }
   }
 
-  box_publisher_.publish(boxes);
-  marker_publisher_.publish(markers);
-  velocity_publisher_.publish(velocity_arrows);
-  acceleration_publisher_.publish(acceleration_arrows);
+  marker_publisher_->publish(markers);
+  velocity_publisher_->publish(velocity_arrows);
+  acceleration_publisher_->publish(acceleration_arrows);
 }
 
 }  // namespace bag_modifier
@@ -220,15 +225,9 @@ void RepairedBagVisualizer::OnObstacles(
 }  // namespace keti
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "repaired_bag_visualizer");
-  ros::NodeHandle node;
-  ros::NodeHandle private_node("~");
-
-  keti::kadif::bag_modifier::RepairedBagVisualizer visualizer;
-  if (!visualizer.Init(&node, &private_node)) {
-    return 1;
-  }
-
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(
+      std::make_shared<keti::kadif::bag_modifier::RepairedBagVisualizer>());
+  rclcpp::shutdown();
   return 0;
 }

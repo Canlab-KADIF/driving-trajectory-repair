@@ -23,30 +23,30 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include <jsk_recognition_msgs/BoundingBoxArray.h>
-#include <ros/ros.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <rclcpp/rclcpp.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include "bag_modifier/geometry/box2d.h"
 #include "bag_modifier/ros/obstacle_conversion.h"
 #include "bag_modifier/track/obstacle_pose_estimator.h"
 #include "bag_modifier/viz/marker_style.h"
-#include "cyber_perception_msgs/PerceptionObstacle.h"
-#include "cyber_perception_msgs/PerceptionObstacles.h"
+#include "cyber_perception_msgs/msg/perception_obstacle.hpp"
+#include "cyber_perception_msgs/msg/perception_obstacles.hpp"
 
 namespace keti {
 namespace kadif {
 namespace bag_modifier {
 
-class EstimationVisualizer {
+class EstimationVisualizer : public rclcpp::Node {
  public:
-  EstimationVisualizer() = default;
-
-  bool Init(ros::NodeHandle* node, ros::NodeHandle* private_node);
+  EstimationVisualizer();
 
  private:
   struct DisappearedEntry {
@@ -56,19 +56,23 @@ class EstimationVisualizer {
     int obstacle_type = 0;
   };
 
-  void OnObstacles(const cyber_perception_msgs::PerceptionObstacles& obstacles);
-  void UpdateTracks(const cyber_perception_msgs::PerceptionObstacles& obstacles,
-                    double timestamp);
-  void DrawEstimates(const ros::Time& stamp, double timestamp,
-                     jsk_recognition_msgs::BoundingBoxArray* boxes,
-                     visualization_msgs::MarkerArray* markers);
+  void OnObstacles(
+      const cyber_perception_msgs::msg::PerceptionObstacles::SharedPtr message);
+  void UpdateTracks(
+      const cyber_perception_msgs::msg::PerceptionObstacles& obstacles,
+      double timestamp);
+  void DrawEstimates(const builtin_interfaces::msg::Time& stamp,
+                     double timestamp,
+                     visualization_msgs::msg::MarkerArray* markers);
 
-  ros::Subscriber obstacle_subscriber_;
-  ros::Publisher box_publisher_;
-  ros::Publisher marker_publisher_;
+  rclcpp::Subscription<cyber_perception_msgs::msg::PerceptionObstacles>::
+      SharedPtr obstacle_subscription_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      marker_publisher_;
 
   ObstaclePoseEstimator pose_estimator_;
-  std::vector<cyber_perception_msgs::PerceptionObstacle> tracked_obstacles_;
+  std::vector<cyber_perception_msgs::msg::PerceptionObstacle>
+      tracked_obstacles_;
   std::unordered_map<int, DisappearedEntry> disappeared_tracks_;
 
   std::string frame_id_ = "map";
@@ -79,64 +83,60 @@ class EstimationVisualizer {
   double track_id_height_ = 1.0;
 };
 
-bool EstimationVisualizer::Init(ros::NodeHandle* node,
-                                ros::NodeHandle* private_node) {
-  private_node->param("frame_id", frame_id_, frame_id_);
-  // Defaulted rather than required: the previous version called getParam
-  // without checking the result, leaving the offsets uninitialised when they
-  // were not set.
-  private_node->param("x_offset", x_offset_, 0.0);
-  private_node->param("y_offset", y_offset_, 0.0);
-  private_node->param("reidentification_window", reidentification_window_,
-                      reidentification_window_);
+EstimationVisualizer::EstimationVisualizer()
+    : rclcpp::Node("estimation_visualizer") {
+  frame_id_ = declare_parameter("frame_id", frame_id_);
+  // Defaulted rather than required: the ROS 1 version read these with an
+  // unchecked getParam, leaving them uninitialised when they were not set.
+  x_offset_ = declare_parameter("x_offset", 0.0);
+  y_offset_ = declare_parameter("y_offset", 0.0);
+  reidentification_window_ =
+      declare_parameter("reidentification_window", reidentification_window_);
 
   ObstaclePoseEstimatorInitOptions estimator_options;
-  int history_size = static_cast<int>(estimator_options.history_size);
-  private_node->param("history_size", history_size, history_size);
+  const int history_size = declare_parameter(
+      "history_size", static_cast<int>(estimator_options.history_size));
   if (history_size > 0) {
     estimator_options.history_size = static_cast<std::size_t>(history_size);
   }
-  private_node->param("stationary_speed_threshold",
-                      estimator_options.stationary_speed_threshold,
-                      estimator_options.stationary_speed_threshold);
+  estimator_options.stationary_speed_threshold =
+      declare_parameter("stationary_speed_threshold",
+                        estimator_options.stationary_speed_threshold);
   if (!pose_estimator_.Init(estimator_options)) {
-    ROS_ERROR("failed to initialise the pose estimator");
-    return false;
+    throw std::runtime_error("failed to initialise the pose estimator");
   }
 
-  obstacle_subscriber_ = node->subscribe(
-      "obstacles", 10, &EstimationVisualizer::OnObstacles, this);
-  box_publisher_ = node->advertise<jsk_recognition_msgs::BoundingBoxArray>(
-      "obstacles_estimation_vis", 1);
-  marker_publisher_ = node->advertise<visualization_msgs::MarkerArray>(
-      "obstacles_estimation_vis_vel", 1);
-  return true;
+  // A recording is replayed with the profile it was captured with, which for a
+  // high-rate perception stream is best effort; a reliable subscription would
+  // not match it.
+  const rclcpp::QoS qos = rclcpp::SensorDataQoS();
+  obstacle_subscription_ =
+      create_subscription<cyber_perception_msgs::msg::PerceptionObstacles>(
+          "obstacles", qos,
+          std::bind(&EstimationVisualizer::OnObstacles, this,
+                    std::placeholders::_1));
+  marker_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
+      "obstacles_estimation_vis", rclcpp::QoS(1));
 }
 
 void EstimationVisualizer::OnObstacles(
-    const cyber_perception_msgs::PerceptionObstacles& obstacles) {
-  const double timestamp = obstacles.cyber_header.timestamp_sec;
-  const ros::Time stamp(timestamp);
+    const cyber_perception_msgs::msg::PerceptionObstacles::SharedPtr message) {
+  const double timestamp = message->cyber_header.timestamp_sec;
+  const builtin_interfaces::msg::Time stamp =
+      rclcpp::Time(static_cast<int64_t>(timestamp * 1e9));
 
-  jsk_recognition_msgs::BoundingBoxArray boxes;
-  boxes.header.seq = obstacles.cyber_header.sequence_num;
-  boxes.header.stamp = stamp;
-  boxes.header.frame_id = frame_id_;
-
-  visualization_msgs::MarkerArray markers;
+  visualization_msgs::msg::MarkerArray markers;
   markers.markers.push_back(MakeDeleteAllMarker(frame_id_));
 
-  DrawEstimates(stamp, timestamp, &boxes, &markers);
-  UpdateTracks(obstacles, timestamp);
+  DrawEstimates(stamp, timestamp, &markers);
+  UpdateTracks(*message, timestamp);
 
-  box_publisher_.publish(boxes);
-  marker_publisher_.publish(markers);
+  marker_publisher_->publish(markers);
 }
 
 void EstimationVisualizer::DrawEstimates(
-    const ros::Time& stamp, double timestamp,
-    jsk_recognition_msgs::BoundingBoxArray* boxes,
-    visualization_msgs::MarkerArray* markers) {
+    const builtin_interfaces::msg::Time& stamp, double timestamp,
+    visualization_msgs::msg::MarkerArray* markers) {
   for (auto it = disappeared_tracks_.begin();
        it != disappeared_tracks_.end();) {
     if (std::fabs(timestamp - it->second.sample.timestamp) >
@@ -163,10 +163,11 @@ void EstimationVisualizer::DrawEstimates(
     box_options.z = entry.z;
     box_options.x_offset = x_offset_;
     box_options.y_offset = y_offset_;
-    box_options.label = 1;
-    boxes->boxes.push_back(MakeBoundingBox(box_options));
+    box_options.marker_id = MarkerId(entry.sample.id, kMarkerSlotArrow);
+    const std_msgs::msg::ColorRGBA color = CategoryColor(entry.obstacle_type);
+    box_options.color = color;
+    markers->markers.push_back(MakeBoundingBox(box_options));
 
-    const std_msgs::ColorRGBA color = CategoryColor(entry.obstacle_type);
     const double x = estimated.center().x() - x_offset_;
     const double y = estimated.center().y() - y_offset_;
 
@@ -192,13 +193,13 @@ void EstimationVisualizer::DrawEstimates(
 }
 
 void EstimationVisualizer::UpdateTracks(
-    const cyber_perception_msgs::PerceptionObstacles& obstacles,
+    const cyber_perception_msgs::msg::PerceptionObstacles& obstacles,
     double timestamp) {
   for (auto it = tracked_obstacles_.begin(); it != tracked_obstacles_.end();) {
     const auto found = std::find_if(
         obstacles.perception_obstacle.begin(),
         obstacles.perception_obstacle.end(),
-        [&it](const cyber_perception_msgs::PerceptionObstacle& candidate) {
+        [&it](const cyber_perception_msgs::msg::PerceptionObstacle& candidate) {
           return candidate.id == it->id;
         });
 
@@ -218,11 +219,12 @@ void EstimationVisualizer::UpdateTracks(
     ++it;
   }
 
-  for (const cyber_perception_msgs::PerceptionObstacle& obstacle :
+  for (const cyber_perception_msgs::msg::PerceptionObstacle& obstacle :
        obstacles.perception_obstacle) {
     const bool already_tracked = std::any_of(
         tracked_obstacles_.begin(), tracked_obstacles_.end(),
-        [&obstacle](const cyber_perception_msgs::PerceptionObstacle& kept) {
+        [&obstacle](
+            const cyber_perception_msgs::msg::PerceptionObstacle& kept) {
           return kept.id == obstacle.id;
         });
     if (already_tracked) {
@@ -238,15 +240,16 @@ void EstimationVisualizer::UpdateTracks(
 }  // namespace keti
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "estimation_visualizer");
-  ros::NodeHandle node;
-  ros::NodeHandle private_node("~");
-
-  keti::kadif::bag_modifier::EstimationVisualizer visualizer;
-  if (!visualizer.Init(&node, &private_node)) {
+  rclcpp::init(argc, argv);
+  try {
+    rclcpp::spin(
+        std::make_shared<keti::kadif::bag_modifier::EstimationVisualizer>());
+  } catch (const std::exception& error) {
+    RCLCPP_FATAL(rclcpp::get_logger("estimation_visualizer"), "%s",
+                 error.what());
+    rclcpp::shutdown();
     return 1;
   }
-
-  ros::spin();
+  rclcpp::shutdown();
   return 0;
 }

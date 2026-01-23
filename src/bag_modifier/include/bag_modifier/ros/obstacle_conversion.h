@@ -17,7 +17,7 @@
 #pragma once
 
 #include "bag_modifier/track/obstacle_sample.h"
-#include "cyber_perception_msgs/PerceptionObstacle.h"
+#include "cyber_perception_msgs/msg/perception_obstacle.hpp"
 
 namespace keti {
 namespace kadif {
@@ -35,7 +35,8 @@ ObstacleClass ToObstacleClass(int message_type);
 // `timestamp` comes from the enclosing PerceptionObstacles header rather than
 // the obstacle itself, because the per-obstacle stamp is not always populated.
 ObstacleSample ToObstacleSample(
-    const cyber_perception_msgs::PerceptionObstacle& message, double timestamp);
+    const cyber_perception_msgs::msg::PerceptionObstacle& message,
+    double timestamp);
 
 }  // namespace bag_modifier
 }  // namespace kadif

@@ -16,7 +16,7 @@
 
 #include "bag_modifier/ros/obstacle_conversion.h"
 
-#include "cyber_perception_msgs/ObstacleType.h"
+#include "cyber_perception_msgs/msg/obstacle_type.hpp"
 
 namespace keti {
 namespace kadif {
@@ -24,13 +24,13 @@ namespace bag_modifier {
 
 ObstacleClass ToObstacleClass(int message_type) {
   switch (message_type) {
-    case cyber_perception_msgs::ObstacleType::PEDESTRIAN:
+    case cyber_perception_msgs::msg::ObstacleType::PEDESTRIAN:
       return ObstacleClass::kPedestrian;
-    case cyber_perception_msgs::ObstacleType::VEHICLE:
+    case cyber_perception_msgs::msg::ObstacleType::VEHICLE:
       return ObstacleClass::kVehicle;
-    case cyber_perception_msgs::ObstacleType::BICYCLE:
+    case cyber_perception_msgs::msg::ObstacleType::BICYCLE:
       return ObstacleClass::kBicycle;
-    case cyber_perception_msgs::ObstacleType::UNKNOWN:
+    case cyber_perception_msgs::msg::ObstacleType::UNKNOWN:
       return ObstacleClass::kUnknown;
     default:
       return ObstacleClass::kOther;
@@ -38,7 +38,7 @@ ObstacleClass ToObstacleClass(int message_type) {
 }
 
 ObstacleSample ToObstacleSample(
-    const cyber_perception_msgs::PerceptionObstacle& message,
+    const cyber_perception_msgs::msg::PerceptionObstacle& message,
     double timestamp) {
   ObstacleSample sample;
   sample.id = message.id;

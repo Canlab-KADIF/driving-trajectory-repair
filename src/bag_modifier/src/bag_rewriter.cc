@@ -18,52 +18,69 @@
 
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 
-#include <rosbag/view.h>
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
+#include <rclcpp/time.hpp>
+#include <rosbag2_storage/topic_metadata.hpp>
 
-#include "cyber_perception_msgs/PerceptionObstacles.h"
+#include "cyber_perception_msgs/msg/perception_obstacles.hpp"
 
 namespace keti {
 namespace kadif {
 namespace bag_modifier {
+namespace {
 
-std::string MakeOutputPath(const std::string& input_path,
-                           const std::string& suffix) {
-  const std::string extension = ".bag";
-  const std::size_t position = input_path.rfind(extension);
-  if (position == std::string::npos ||
-      position + extension.size() != input_path.size()) {
-    return input_path + suffix + extension;
+const char* const kObstacleMessageType =
+    "cyber_perception_msgs/msg/PerceptionObstacles";
+
+// Strips a trailing path separator so that a uri given as "recording/" and one
+// given as "recording" produce the same output names.
+std::string StripTrailingSlash(const std::string& uri) {
+  if (uri.size() > 1 && uri.back() == '/') {
+    return uri.substr(0, uri.size() - 1);
   }
-  return input_path.substr(0, position) + suffix + extension;
+  return uri;
 }
 
-BagRewriter::~BagRewriter() {
-  if (initialized_) {
-    input_bag_.close();
-    repaired_bag_.close();
-    interpolated_bag_.close();
-  }
+}  // namespace
+
+std::string MakeOutputUri(const std::string& input_uri,
+                          const std::string& suffix) {
+  return StripTrailingSlash(input_uri) + suffix;
 }
 
 bool BagRewriter::Init(const BagRewriterInitOptions& options) {
   options_ = options;
 
+  reader_ = std::make_unique<rosbag2_cpp::Reader>();
   try {
-    input_bag_.open(options_.input_bag_path, rosbag::bagmode::Read);
-  } catch (const rosbag::BagException& error) {
-    std::cerr << "cannot read " << options_.input_bag_path << ": "
+    reader_->open(options_.input_bag_uri);
+  } catch (const std::exception& error) {
+    std::cerr << "cannot read " << options_.input_bag_uri << ": "
               << error.what() << std::endl;
     return false;
   }
 
+  const auto open_writer = [this](const std::string& uri) {
+    auto writer = std::make_unique<rosbag2_cpp::Writer>();
+    if (options_.storage_id.empty()) {
+      writer->open(uri);
+    } else {
+      rosbag2_storage::StorageOptions storage_options;
+      storage_options.uri = uri;
+      storage_options.storage_id = options_.storage_id;
+      writer->open(storage_options, {});
+    }
+    return writer;
+  };
+
   try {
-    repaired_bag_.open(options_.repaired_bag_path, rosbag::bagmode::Write);
-    interpolated_bag_.open(options_.interpolated_bag_path,
-                           rosbag::bagmode::Write);
-  } catch (const rosbag::BagException& error) {
+    repaired_writer_ = open_writer(options_.repaired_bag_uri);
+    interpolated_writer_ = open_writer(options_.interpolated_bag_uri);
+  } catch (const std::exception& error) {
     std::cerr << "cannot write the output bags: " << error.what() << std::endl;
-    input_bag_.close();
     return false;
   }
 
@@ -94,38 +111,46 @@ bool BagRewriter::Run() {
 }
 
 bool BagRewriter::ScanInputBag() {
-  rosbag::View view(input_bag_);
+  // Recreate every input topic on the repaired output, so that topics which
+  // are copied through keep their type and serialisation format.
+  for (const rosbag2_storage::TopicMetadata& topic :
+       reader_->get_all_topics_and_types()) {
+    repaired_writer_->create_topic(topic);
+  }
 
+  rclcpp::Serialization<cyber_perception_msgs::msg::PerceptionObstacles>
+      serialization;
   double previous_timestamp = 0.0;
 
-  for (const rosbag::MessageInstance& message : view) {
+  while (reader_->has_next()) {
+    const auto message = reader_->read_next();
     ++statistics_.total_messages;
 
-    if (message.getTopic() != options_.obstacle_topic) {
-      // Everything that is not the repaired stream is copied verbatim, so the
-      // output bag stays a drop-in replacement for the recording.
-      repaired_bag_.write(message.getTopic(), message.getTime(), message);
+    if (message->topic_name != options_.obstacle_topic) {
+      // Copied as bytes: the message definition does not have to be available
+      repaired_writer_->write(message);
       continue;
     }
 
-    const cyber_perception_msgs::PerceptionObstacles::ConstPtr obstacles =
-        message.instantiate<cyber_perception_msgs::PerceptionObstacles>();
-    if (obstacles == nullptr) {
-      std::cerr << "message on " << options_.obstacle_topic
-                << " is not a PerceptionObstacles, copying it unchanged"
-                << std::endl;
-      repaired_bag_.write(message.getTopic(), message.getTime(), message);
+    rclcpp::SerializedMessage serialized(*message->serialized_data);
+    cyber_perception_msgs::msg::PerceptionObstacles obstacles;
+    try {
+      serialization.deserialize_message(&serialized, &obstacles);
+    } catch (const std::exception& error) {
+      std::cerr << "cannot deserialise a message on " << options_.obstacle_topic
+                << ", copying it unchanged: " << error.what() << std::endl;
+      repaired_writer_->write(message);
       continue;
     }
 
-    const double timestamp = obstacles->cyber_header.timestamp_sec;
+    const double timestamp = obstacles.cyber_header.timestamp_sec;
     if (timestamp - previous_timestamp <= options_.duplicate_frame_tolerance) {
       ++statistics_.duplicate_frames_skipped;
       continue;
     }
     previous_timestamp = timestamp;
 
-    if (!repairer_.AddFrame(message.getTime(), *obstacles)) {
+    if (!repairer_.AddFrame(message->recv_timestamp, obstacles)) {
       return false;
     }
     ++statistics_.obstacle_frames;
@@ -139,11 +164,15 @@ bool BagRewriter::WriteOutputBags() {
   const std::vector<TimedObstacles>& interpolated =
       repairer_.interpolated_frames();
 
+  interpolated_writer_->create_topic(rosbag2_storage::TopicMetadata{
+      0, options_.interpolated_topic, kObstacleMessageType, "cdr", {}, ""});
+
   for (std::size_t i = 0; i < repaired.size(); ++i) {
-    repaired_bag_.write(options_.obstacle_topic, repaired[i].stamp,
-                        repaired[i].obstacles);
-    interpolated_bag_.write(options_.interpolated_topic, interpolated[i].stamp,
-                            interpolated[i].obstacles);
+    repaired_writer_->write(repaired[i].obstacles, options_.obstacle_topic,
+                            rclcpp::Time(repaired[i].stamp_ns));
+    interpolated_writer_->write(interpolated[i].obstacles,
+                                options_.interpolated_topic,
+                                rclcpp::Time(interpolated[i].stamp_ns));
   }
   return true;
 }

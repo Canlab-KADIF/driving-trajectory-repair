@@ -17,9 +17,11 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <string>
 
-#include <rosbag/bag.h>
+#include <rosbag2_cpp/reader.hpp>
+#include <rosbag2_cpp/writer.hpp>
 
 #include "bag_modifier/track/track_repairer.h"
 
@@ -28,16 +30,21 @@ namespace kadif {
 namespace bag_modifier {
 
 struct BagRewriterInitOptions {
-  std::string input_bag_path;
+  // Directory of the recording to read. Never modified.
+  std::string input_bag_uri;
 
   // Every recorded topic is copied through unchanged; this one is repaired.
   std::string obstacle_topic = "/obstacles";
 
   // Output bag holding all original topics plus the repaired obstacle stream.
-  std::string repaired_bag_path;
+  std::string repaired_bag_uri;
   // Output bag holding only the synthesised obstacles, for inspection.
-  std::string interpolated_bag_path;
+  std::string interpolated_bag_uri;
   std::string interpolated_topic = "/obstacles_modified";
+
+  // Storage plugin for the outputs. Left empty to follow the default, which is
+  // mcap on Jazzy and sqlite3 on Humble.
+  std::string storage_id;
 
   // Consecutive frames whose perception timestamps differ by less than this are
   // duplicates of the same detection cycle, which the recorder occasionally
@@ -57,10 +64,14 @@ struct BagRewriterStatistics {
 
 // Reads a recorded bag, repairs the object-tracking stream in it, and writes
 // two new bags. The input bag is never modified.
+//
+// Topics other than the repaired one are copied as serialised bytes without
+// being deserialised, so the tool does not need their message definitions to
+// be available and passes them through byte for byte.
 class BagRewriter {
  public:
   BagRewriter() = default;
-  ~BagRewriter();
+  ~BagRewriter() = default;
 
   BagRewriter(const BagRewriter&) = delete;
   BagRewriter& operator=(const BagRewriter&) = delete;
@@ -79,18 +90,17 @@ class BagRewriter {
   bool WriteOutputBags();
 
   BagRewriterInitOptions options_;
-  rosbag::Bag input_bag_;
-  rosbag::Bag repaired_bag_;
-  rosbag::Bag interpolated_bag_;
+  std::unique_ptr<rosbag2_cpp::Reader> reader_;
+  std::unique_ptr<rosbag2_cpp::Writer> repaired_writer_;
+  std::unique_ptr<rosbag2_cpp::Writer> interpolated_writer_;
   TrackRepairer repairer_;
   BagRewriterStatistics statistics_;
   bool initialized_ = false;
 };
 
-// Derives the two output paths from the input path by appending suffixes
-// before the .bag extension.
-std::string MakeOutputPath(const std::string& input_path,
-                           const std::string& suffix);
+// Derives an output bag uri from the input one by appending a suffix.
+std::string MakeOutputUri(const std::string& input_uri,
+                          const std::string& suffix);
 
 }  // namespace bag_modifier
 }  // namespace kadif

@@ -18,10 +18,9 @@
 
 #include <string>
 
-#include <jsk_recognition_msgs/BoundingBox.h>
-#include <ros/time.h>
-#include <std_msgs/ColorRGBA.h>
-#include <visualization_msgs/Marker.h>
+#include <builtin_interfaces/msg/time.hpp>
+#include <std_msgs/msg/color_rgba.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 #include "bag_modifier/geometry/box2d.h"
 
@@ -33,9 +32,9 @@ namespace bag_modifier {
 // own copy of the palette and the label table.
 
 // Colour from the 20-entry qualitative palette, wrapping on overflow.
-std_msgs::ColorRGBA CategoryColor(int index);
+std_msgs::msg::ColorRGBA CategoryColor(int index);
 
-// Human-readable name of a cyber_perception_msgs::ObstacleType value.
+// Human-readable name of a cyber_perception_msgs::msg::ObstacleType value.
 std::string ObstacleTypeLabel(int obstacle_type);
 
 // Marker id offsets, so that the class label, the track id and the arrow of one
@@ -53,25 +52,32 @@ inline int MarkerId(int obstacle_id, MarkerSlot slot) {
 
 // A DELETEALL marker, which every array starts with so that obstacles removed
 // since the previous frame do not linger in rviz.
-visualization_msgs::Marker MakeDeleteAllMarker(const std::string& frame_id);
+visualization_msgs::msg::Marker MakeDeleteAllMarker(
+    const std::string& frame_id);
+
+// Namespaces keep the three marker kinds separately toggleable in rviz.
+extern const char* const kFootprintNamespace;
+extern const char* const kTextNamespace;
+extern const char* const kArrowNamespace;
 
 struct TextMarkerOptions {
   std::string frame_id = "map";
-  ros::Time stamp;
+  builtin_interfaces::msg::Time stamp;
   std::string text;
   double x = 0.0;
   double y = 0.0;
   double z = 0.0;
   double text_height = 1.0;
   int marker_id = 0;
-  std_msgs::ColorRGBA color;
+  std_msgs::msg::ColorRGBA color;
 };
 
-visualization_msgs::Marker MakeTextMarker(const TextMarkerOptions& options);
+visualization_msgs::msg::Marker MakeTextMarker(
+    const TextMarkerOptions& options);
 
 struct BoundingBoxOptions {
   std::string frame_id = "map";
-  ros::Time stamp;
+  builtin_interfaces::msg::Time stamp;
   Box2d footprint;
   double height = 0.0;
   double z = 0.0;
@@ -79,10 +85,18 @@ struct BoundingBoxOptions {
   // precision in the rviz float32 transform.
   double x_offset = 0.0;
   double y_offset = 0.0;
-  int label = 0;
+  int marker_id = 0;
+  std_msgs::msg::ColorRGBA color;
+  // Boxes are drawn translucent so that overlapping obstacles stay readable
+  float alpha = 0.45f;
 };
 
-jsk_recognition_msgs::BoundingBox MakeBoundingBox(
+// Footprint of an obstacle, drawn as an oriented box.
+//
+// Earlier revisions emitted jsk_recognition_msgs/BoundingBox, which is not part
+// of a standard ROS 2 installation. A CUBE marker renders in stock rviz2 and
+// removes the dependency.
+visualization_msgs::msg::Marker MakeBoundingBox(
     const BoundingBoxOptions& options);
 
 }  // namespace bag_modifier

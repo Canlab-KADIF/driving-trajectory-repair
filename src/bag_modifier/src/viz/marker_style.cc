@@ -17,8 +17,7 @@
 #include "bag_modifier/viz/marker_style.h"
 
 #include <array>
-
-#include <tf/tf.h>
+#include <cmath>
 
 namespace keti {
 namespace kadif {
@@ -46,7 +45,7 @@ constexpr std::array<Rgb, 20> kCategoryPalette = {{
     {0.090196f, 0.745098f, 0.811765f}, {0.619608f, 0.854902f, 0.898039f},
 }};
 
-// Index order matches cyber_perception_msgs::ObstacleType
+// Index order matches cyber_perception_msgs::msg::ObstacleType
 constexpr std::array<const char*, 6> kObstacleTypeNames = {{
     "UNKNOWN",
     "UNKNOWN_MOVABLE",
@@ -58,13 +57,17 @@ constexpr std::array<const char*, 6> kObstacleTypeNames = {{
 
 }  // namespace
 
-std_msgs::ColorRGBA CategoryColor(int index) {
+const char* const kFootprintNamespace = "footprint";
+const char* const kTextNamespace = "text";
+const char* const kArrowNamespace = "arrow";
+
+std_msgs::msg::ColorRGBA CategoryColor(int index) {
   const std::size_t slot = static_cast<std::size_t>(
       ((index % kCategoryPalette.size()) + kCategoryPalette.size()) %
       kCategoryPalette.size());
   const Rgb& rgb = kCategoryPalette[slot];
 
-  std_msgs::ColorRGBA color;
+  std_msgs::msg::ColorRGBA color;
   color.r = rgb.r;
   color.g = rgb.g;
   color.b = rgb.b;
@@ -80,21 +83,24 @@ std::string ObstacleTypeLabel(int obstacle_type) {
   return kObstacleTypeNames[static_cast<std::size_t>(obstacle_type)];
 }
 
-visualization_msgs::Marker MakeDeleteAllMarker(const std::string& frame_id) {
-  visualization_msgs::Marker marker;
+visualization_msgs::msg::Marker MakeDeleteAllMarker(
+    const std::string& frame_id) {
+  visualization_msgs::msg::Marker marker;
   marker.header.frame_id = frame_id;
   marker.id = 0;
-  marker.action = visualization_msgs::Marker::DELETEALL;
+  marker.action = visualization_msgs::msg::Marker::DELETEALL;
   return marker;
 }
 
-visualization_msgs::Marker MakeTextMarker(const TextMarkerOptions& options) {
-  visualization_msgs::Marker marker;
+visualization_msgs::msg::Marker MakeTextMarker(
+    const TextMarkerOptions& options) {
+  visualization_msgs::msg::Marker marker;
   marker.header.frame_id = options.frame_id;
   marker.header.stamp = options.stamp;
 
-  marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-  marker.action = visualization_msgs::Marker::ADD;
+  marker.ns = kTextNamespace;
+  marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+  marker.action = visualization_msgs::msg::Marker::ADD;
   marker.id = options.marker_id;
   marker.text = options.text;
   marker.color = options.color;
@@ -107,25 +113,33 @@ visualization_msgs::Marker MakeTextMarker(const TextMarkerOptions& options) {
   return marker;
 }
 
-jsk_recognition_msgs::BoundingBox MakeBoundingBox(
+visualization_msgs::msg::Marker MakeBoundingBox(
     const BoundingBoxOptions& options) {
-  jsk_recognition_msgs::BoundingBox box;
+  visualization_msgs::msg::Marker box;
   box.header.frame_id = options.frame_id;
   box.header.stamp = options.stamp;
+  box.ns = kFootprintNamespace;
+  box.id = options.marker_id;
+  box.type = visualization_msgs::msg::Marker::CUBE;
+  box.action = visualization_msgs::msg::Marker::ADD;
 
-  box.dimensions.x = options.footprint.length();
-  box.dimensions.y = options.footprint.width();
-  box.dimensions.z = options.height;
+  box.scale.x = options.footprint.length();
+  box.scale.y = options.footprint.width();
+  box.scale.z = options.height;
 
   box.pose.position.x = options.footprint.center().x() - options.x_offset;
   box.pose.position.y = options.footprint.center().y() - options.y_offset;
   box.pose.position.z = options.z;
 
-  const tf::Quaternion quaternion =
-      tf::createQuaternionFromRPY(0.0, 0.0, options.footprint.heading());
-  tf::quaternionTFToMsg(quaternion, box.pose.orientation);
+  // Yaw-only rotation, so the quaternion reduces to a half-angle pair
+  const double half_yaw = options.footprint.heading() / 2.0;
+  box.pose.orientation.x = 0.0;
+  box.pose.orientation.y = 0.0;
+  box.pose.orientation.z = std::sin(half_yaw);
+  box.pose.orientation.w = std::cos(half_yaw);
 
-  box.label = options.label;
+  box.color = options.color;
+  box.color.a = options.alpha;
   return box;
 }
 

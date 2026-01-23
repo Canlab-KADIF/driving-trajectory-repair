@@ -17,33 +17,36 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <unordered_map>
 #include <vector>
 
-#include <ros/time.h>
-
 #include "bag_modifier/spline/spline_solver.h"
 #include "bag_modifier/track/obstacle_pose_estimator.h"
 #include "bag_modifier/track/obstacle_sample.h"
-#include "cyber_perception_msgs/PerceptionObstacle.h"
-#include "cyber_perception_msgs/PerceptionObstacles.h"
+#include "cyber_perception_msgs/msg/perception_obstacle.hpp"
+#include "cyber_perception_msgs/msg/perception_obstacles.hpp"
 
 namespace keti {
 namespace kadif {
 namespace bag_modifier {
 
 // One perception frame together with the bag time it was recorded at.
+//
+// The stamp is plain nanoseconds rather than a ROS time type, so this header
+// stays free of any ROS client library and the algorithm survives a change of
+// ROS version.
 struct TimedObstacles {
-  ros::Time stamp;
-  cyber_perception_msgs::PerceptionObstacles obstacles;
+  std::int64_t stamp_ns = 0;
+  cyber_perception_msgs::msg::PerceptionObstacles obstacles;
 };
 
 // A track that perception stopped reporting, kept as a re-identification
 // candidate until the matching window expires.
 struct DisappearedTrack {
   ObstacleSample last_sample;
-  cyber_perception_msgs::PerceptionObstacle last_message;
+  cyber_perception_msgs::msg::PerceptionObstacle last_message;
   // Index of the frame in which the track was first missing
   std::size_t frame_index = 0;
 };
@@ -100,8 +103,9 @@ class TrackRepairer {
 
   // Ingests one perception frame. Frames must be supplied in recording order,
   // because gap indices refer to positions in this sequence.
-  bool AddFrame(const ros::Time& stamp,
-                const cyber_perception_msgs::PerceptionObstacles& obstacles);
+  bool AddFrame(
+      std::int64_t stamp_ns,
+      const cyber_perception_msgs::msg::PerceptionObstacles& obstacles);
 
   // Interpolates every matched gap and rewrites the re-identified ids.
   // Call once, after the last AddFrame().
@@ -134,26 +138,29 @@ class TrackRepairer {
   };
 
   void UpdateTracks(
-      const cyber_perception_msgs::PerceptionObstacles& obstacles,
+      const cyber_perception_msgs::msg::PerceptionObstacles& obstacles,
       double timestamp, std::size_t frame_index,
-      std::vector<cyber_perception_msgs::PerceptionObstacle>* new_obstacles);
+      std::vector<cyber_perception_msgs::msg::PerceptionObstacle>*
+          new_obstacles);
 
   void ExpireDisappearedTracks(double timestamp);
 
   void MatchNewTracks(
-      const std::vector<cyber_perception_msgs::PerceptionObstacle>&
+      const std::vector<cyber_perception_msgs::msg::PerceptionObstacle>&
           new_obstacles,
       double timestamp, std::size_t frame_index);
 
   bool InterpolateGaps();
   void UnifyMatchedIds();
-  void RewriteIds(cyber_perception_msgs::PerceptionObstacles* obstacles) const;
+  void RewriteIds(
+      cyber_perception_msgs::msg::PerceptionObstacles* obstacles) const;
 
   TrackRepairerInitOptions options_;
   ObstaclePoseEstimator pose_estimator_;
   SplineSolver spline_solver_;
 
-  std::vector<cyber_perception_msgs::PerceptionObstacle> tracked_obstacles_;
+  std::vector<cyber_perception_msgs::msg::PerceptionObstacle>
+      tracked_obstacles_;
   std::unordered_map<int, DisappearedTrack> disappeared_tracks_;
   // Ordered so that repeated runs over the same bag produce identical output
   std::map<int, TrackMatch> matches_;
