@@ -1,7 +1,8 @@
 # ros-bag-modifier
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![ROS](https://img.shields.io/badge/ROS-Noetic-22314E.svg)](http://wiki.ros.org/noetic)
+[![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy-22314E.svg)](https://docs.ros.org)
+[![tests](https://img.shields.io/badge/tests-34%20passing-brightgreen.svg)](#기하-모듈만-검증하기-의존성-불필요)
 
 기록된 ROS bag에서 **끊어진 객체 추적 궤적을 복원**하는 오프라인 도구입니다.
 인지 모듈이 가림·센서 사각으로 트랙을 놓쳤다가 새 ID로 다시 잡은 구간을 재식별하고,
@@ -18,20 +19,32 @@
 
 ## ⚠️ 먼저 읽어주세요 — 빌드 전제조건
 
-**이 패키지는 공개 배포되지 않은 ROS 메시지·라이브러리 패키지에 의존합니다.**
+**이 패키지는 공개 배포되지 않은 ROS 메시지 패키지 하나에 의존합니다.**
 `git clone` 후 바로 빌드되지 않습니다.
 
 | 필요한 패키지 | 제공 내용 | 공개 여부 |
 |---|---|---|
 | `cyber_perception_msgs` | 인지 객체 스트림 메시지 | ❌ 비공개 |
-| `utils`, `planner` | QP 스플라인 솔버 (`OsqpSpline2dSolver`) | ❌ 비공개 |
-| `jsk_recognition_msgs` | rviz 바운딩박스 (시각화 노드 전용) | ✅ 공개 |
+| `rclcpp`, `rosbag2_cpp`, `visualization_msgs` | ROS 2 기본 | ✅ 공개 |
+| Eigen3 | 선형대수 | ✅ 공개 (MPL-2.0) |
 
 메시지 필드 명세는 [인터페이스](#인터페이스) 절에 전부 기재했습니다.
-동등한 `.msg`를 직접 정의하면 알고리즘 부분은 그대로 사용할 수 있습니다.
+동등한 `.msg`를 직접 정의하면 그대로 사용할 수 있습니다.
+
+이전 버전은 QP 스플라인 솔버(`utils`/`planner`)와 `jsk_recognition_msgs`에도
+의존했습니다. 전자는 자체 최소제곱 구현으로 대체했고 후자는 표준
+`visualization_msgs`로 바꿔서, **비공개 의존이 메시지 하나로 줄었습니다.**
 
 **의존성 없이도 동작하는 부분**: `bag_modifier_geometry` 라이브러리(기하 연산 +
-운동 모델)와 그 단위 테스트는 ROS·비공개 의존성이 전혀 없어 단독으로 빌드·검증됩니다.
+운동 모델 + 곡선 피팅)와 그 단위 테스트 34개는 ROS·비공개 의존성이 전혀 없어
+단독으로 빌드·검증됩니다.
+
+### 지원 ROS 버전
+
+| 브랜치 | ROS | 상태 |
+|---|---|---|
+| `main` | **ROS 2 Humble, Jazzy** | 활성 |
+| `noetic-devel` | ROS 1 Noetic | 유지보수만 (Noetic은 2025년 5월 EOL) |
 
 ---
 
@@ -80,9 +93,9 @@
  [실차 주행]
      │  트리거 발생 시 센서/인지/제어 데이터 동기 로깅
      ▼
- recording.bag ────────▶ ★ ros-bag-modifier ────────▶ recording_repaired.bag
+ recording/ ──────────▶ ★ ros-bag-modifier ────────▶ recording_repaired/
                           트랙 재식별 + 궤적 보간                │
-                                                              │ rosbag play
+                                                              │ ros2 bag play
                                                               ▼
                                                     bag-to-sim-interface
                                                     시뮬레이터 주행상황 재현
@@ -119,16 +132,16 @@
 └──────────────┬───────────────────────┘
                ▼
 ┌──────────────────────────────────────┐   ┌──────────────────┐
-│ geometry/   ROS·외부 라이브러리 의존 0   │   │ spline/          │
-│  vec2d  box2d  polygon_iou  angle_math│   │ QP 스플라인 래퍼    │
+│ geometry/   ROS 의존 0                 │   │ spline/          │
+│  vec2d  box2d  polygon_iou  angle_math│   │ 최소제곱 곡선 피팅  │
 └──────────────────────────────────────┘   └──────────────────┘
 ```
 
 | 빌드 타깃 | 내용 | 외부 의존 |
 |---|---|---|
-| `bag_modifier_geometry` | 기하 연산, CTRV/선형 운동 모델 | 없음 (표준 C++만) |
-| `bag_modifier_core` | 메시지 변환, 트랙 보정, bag 입출력 | roscpp, rosbag, 인지 메시지, 스플라인 솔버 |
-| `bag_modifier_viz` | rviz 마커 생성 | jsk_recognition_msgs |
+| `bag_modifier_geometry` | 기하 연산, CTRV/선형 운동 모델, 곡선 피팅 | Eigen3만 (ROS 없음) |
+| `bag_modifier_core` | 메시지 변환, 트랙 보정, bag 입출력 | rclcpp, rosbag2_cpp, 인지 메시지 |
+| `bag_modifier_viz` | rviz 마커 생성 | visualization_msgs |
 
 ## 동작 원리
 
@@ -190,9 +203,9 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 1. 두 끝점의 heading 차이로 **직선/원호**를 판정하고, 원호면 현 길이와 사잇각으로
    반지름과 각속도를 구합니다
 2. 그 등회전율 모델로 중간 프레임마다 **제어점**을 생성합니다
-3. 제어점들을 5차 스플라인으로 QP 피팅합니다. 양 끝점은 실제 관측값이므로 위치·
-   접선을 1 mm 수준으로 고정하고, 중간 제어점은 `spline_lateral_bound`(기본 0.7 m)
-   범위에서 움직일 수 있게 둡니다
+3. 제어점들을 균일 3차 B-스플라인으로 **벌점 최소제곱** 피팅합니다. 중간 제어점은
+   데이터로 들어가고 계수의 2차·3차 차분에 벌점을 주며, 양 끝점은 실제 관측값이므로
+   위치와 접선을 KKT 등식제약으로 **정확히** 고정합니다
 4. 피팅된 곡선 위의 점을 각 프레임의 보간 자세로 기록합니다
 
 진행 방향이 heading과 150° 이상 어긋나면 후진으로 판정해 접선을 뒤집습니다.
@@ -208,10 +221,14 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 
 ### 요구사항
 
-- Ubuntu 20.04
-- ROS 1 Noetic (⚠️ 2025년 5월 EOL — [제약사항](#제약사항-및-알려진-이슈) 참고)
-- C++14 컴파일러, CMake ≥ 3.0.2
-- 비공개 의존 패키지 (위 [빌드 전제조건](#-먼저-읽어주세요--빌드-전제조건) 참고)
+| | Humble | Jazzy |
+|---|---|---|
+| Ubuntu | 22.04 | 24.04 |
+| C++ | 17 | 17 |
+| 기본 bag 저장 형식 | sqlite3 | mcap |
+
+- CMake ≥ 3.8, Eigen3
+- 비공개 메시지 패키지 (위 [빌드 전제조건](#-먼저-읽어주세요--빌드-전제조건) 참고)
 
 ### 빌드
 
@@ -219,28 +236,33 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 git clone https://github.com/keti-mobility/ros-bag-modifier.git
 cd ros-bag-modifier
 
-# 비공개 의존 패키지를 src/ 아래에 함께 두어야 합니다
-source /opt/ros/noetic/setup.bash
-catkin_make
-source devel/setup.bash
+# 비공개 메시지 패키지를 src/ 아래에 함께 두어야 합니다
+source /opt/ros/jazzy/setup.bash      # 또는 /opt/ros/humble/setup.bash
+colcon build
+source install/setup.bash
 ```
+
+ROS 1 Noetic 버전이 필요하면 `git checkout noetic-devel` 후 `catkin_make`를
+쓰십시오.
 
 ### 기하 모듈만 검증하기 (의존성 불필요)
 
 ROS나 비공개 패키지 없이도 핵심 알고리즘을 확인할 수 있습니다.
 
 ```bash
-sudo apt install libgtest-dev g++
+sudo apt install libgtest-dev libeigen3-dev g++
 cd src/bag_modifier
-g++ -std=c++14 -I include \
+g++ -std=c++17 -I include -I /usr/include/eigen3 \
     test/test_geometry.cc test/test_obstacle_pose_estimator.cc \
+    test/test_spline_solver.cc \
     src/geometry/box2d.cc src/geometry/polygon_iou.cc \
-    src/track/obstacle_pose_estimator.cc \
+    src/track/obstacle_pose_estimator.cc src/spline/spline_solver.cc \
     -lgtest -lgtest_main -pthread -o test_geometry
-./test_geometry
+./test_geometry      # 34 tests
 ```
 
-catkin 워크스페이스 안에서는 `catkin_make run_tests_bag_modifier`로도 실행됩니다.
+colcon 워크스페이스 안에서는 `colcon test --packages-select bag_modifier`로도
+실행됩니다. 이 검사는 CI에서도 매 PR마다 돌아갑니다.
 
 ## 사용법
 
@@ -248,20 +270,24 @@ catkin 워크스페이스 안에서는 `catkin_make run_tests_bag_modifier`로�
 
 ```bash
 # launch 사용 (권장 — 파라미터 파일이 함께 적용됨)
-roslaunch bag_modifier bag_modifier.launch bag:=/path/to/recording.bag
+ros2 launch bag_modifier bag_modifier.launch.py bag:=/path/to/recording
 
 # 직접 실행
-rosrun bag_modifier bag_modifier /path/to/recording.bag
+ros2 run bag_modifier bag_modifier /path/to/recording \
+    --ros-args --params-file config/bag_modifier.yaml
 ```
+
+ROS 2 bag은 파일이 아니라 **디렉터리**입니다. 경로에 확장자를 붙이지 마십시오.
 
 출력 두 개가 생성됩니다. **원본 bag은 수정되지 않습니다.**
 
-| 파일 | 내용 |
+| 디렉터리 | 내용 |
 |---|---|
-| `recording_repaired.bag` | 원본의 모든 토픽 + 복원된 `/obstacles` |
-| `recording_repaired_interpolated_only.bag` | 합성된 자세만 (`/obstacles_modified`) |
+| `recording_repaired/` | 원본의 모든 토픽 + 복원된 `/obstacles` |
+| `recording_repaired_interpolated_only/` | 합성된 자세만 (`/obstacles_modified`) |
 
-접미사는 두 번째 인자로 바꿀 수 있습니다: `... recording.bag _v2`
+복원 대상이 아닌 토픽은 **역직렬화 없이 바이트 그대로 복사**되므로, 그 토픽들의
+메시지 정의가 없어도 동작합니다. 접미사는 두 번째 인자로 바꿀 수 있습니다.
 
 실행이 끝나면 처리 통계가 출력됩니다.
 
@@ -275,8 +301,8 @@ rosrun bag_modifier bag_modifier /path/to/recording.bag
 ### rviz로 확인
 
 ```bash
-roslaunch bag_modifier visualize.launch x_offset:=332950.0 y_offset:=4140495.0
-rosbag play recording_repaired.bag
+ros2 launch bag_modifier visualize.launch.py x_offset:=332950.0 y_offset:=4140495.0
+ros2 bag play recording_repaired
 ```
 
 `x_offset`/`y_offset`은 그려지는 모든 좌표에서 빼는 값입니다. 지도 좌표가 UTM
@@ -313,10 +339,10 @@ rosbag play recording_repaired.bag
 
 | 파라미터 | 기본값 | 의미 |
 |---|---|---|
-| `spline_order` | `5` | 스플라인 차수. 5차라야 곡률이 연속 |
-| `spline_lateral_bound` | `0.7` m | 중간 제어점의 횡방향 허용 이탈. 양 끝점은 실제 관측이라 훨씬 강하게 고정됨 |
-| `spline_second_derivative_weight` | `200.0` | 2차 미분 평활 가중치 |
-| `spline_third_derivative_weight` | `1000.0` | 3차 미분 평활 가중치. 2차보다 훨씬 크게 줘 곡률이 천천히 변하도록 함 |
+| `spline_segment_count` | `8` | 곡선을 이루는 구간 수. 많을수록 제어점을 가깝게 따라가고 덜 매끄러움 |
+| `spline_fit_weight` | `1.0` | 적합 항 대 평활 항의 비중. 양 끝점은 등식제약이라 중간 제어점 추종에만 영향 |
+| `spline_second_derivative_weight` | `0.2` | 2차 차분 벌점 |
+| `spline_third_derivative_weight` | `1.0` | 3차 차분 벌점. 2차의 5배로 둬 곡률이 천천히 변하게 함. 이 값에서 20 m 호를 3 mm로 따라가면서 제어점의 30 cm 노이즈는 무시함 |
 
 ### 입출력
 
@@ -332,14 +358,17 @@ rosbag play recording_repaired.bag
 
 | 노드 | 방향 | 토픽 | 타입 |
 |---|---|---|---|
-| `bag_modifier` | bag 읽기 | `/obstacles` | `cyber_perception_msgs/PerceptionObstacles` |
+| `bag_modifier` | bag 읽기 | `/obstacles` | `cyber_perception_msgs/msg/PerceptionObstacles` |
 | `bag_modifier` | bag 쓰기 | `/obstacles`, `/obstacles_modified` | 〃 |
 | `estimation_visualizer` | 구독 | `obstacles` | 〃 |
-| `estimation_visualizer` | 발행 | `obstacles_estimation_vis` | `jsk_recognition_msgs/BoundingBoxArray` |
-| `estimation_visualizer` | 발행 | `obstacles_estimation_vis_vel` | `visualization_msgs/MarkerArray` |
-| `repaired_bag_visualizer` | 구독 | `obstacles_modified` | `cyber_perception_msgs/PerceptionObstacles` |
-| `repaired_bag_visualizer` | 발행 | `obstacles_vis_modified` | `jsk_recognition_msgs/BoundingBoxArray` |
-| `repaired_bag_visualizer` | 발행 | `obstacles_vis_vel_modified`, `converter_vis_vel`, `converter_vis_accel` | `visualization_msgs/MarkerArray` |
+| `estimation_visualizer` | 발행 | `obstacles_estimation_vis` | `visualization_msgs/msg/MarkerArray` |
+| `repaired_bag_visualizer` | 구독 | `obstacles_modified` | `cyber_perception_msgs/msg/PerceptionObstacles` |
+| `repaired_bag_visualizer` | 발행 | `obstacles_vis_modified` | `visualization_msgs/msg/MarkerArray` |
+| `repaired_bag_visualizer` | 발행 | `obstacles_vis_velocity`, `obstacles_vis_acceleration` | 〃 |
+
+마커는 `footprint` / `text` / `arrow` 네임스페이스로 나뉘어 있어 rviz2에서 따로
+켜고 끌 수 있습니다. 구독은 모두 **sensor data QoS(best effort)** 입니다 —
+`ros2 bag play`가 기록된 프로파일로 재발행하므로 reliable 구독은 매칭되지 않습니다.
 
 ### 의존 메시지 명세
 
@@ -386,10 +415,10 @@ rosbag play recording_repaired.bag
 | 4 | `BICYCLE` | 일반 |
 | 5 | `VEHICLE` | 일반 |
 
-### 의존 라이브러리 인터페이스
+### 이전 버전의 외부 솔버 인터페이스 (참고)
 
-`utils`/`planner`가 제공하는 QP 스플라인 솔버는 다음 API만 사용합니다
-([`src/spline/spline_solver.cc`](src/bag_modifier/src/spline/spline_solver.cc)).
+ROS 1 버전(`noetic-devel`)은 `utils`/`planner`가 제공하는 QP 스플라인 솔버의
+다음 API를 사용했습니다. **현재 `main`에는 이 의존이 없습니다.**
 
 ```cpp
 keti::planning::OsqpSpline2dSolver(const std::vector<double>& knots, int order);
@@ -411,19 +440,19 @@ void AddThirdOrderDerivativeMatrix(double weight);
 void AddRegularization(double weight);
 ```
 
-동등한 기능을 가진 다른 솔버(예: OSQP 직접 사용)로 교체하려면 이 파일 하나만
-바꾸면 됩니다.
+ROS 1 브랜치를 계속 쓰면서 이 의존을 없애려면, 해당 브랜치의
+`src/spline/spline_solver.cc` 하나만 `main`의 구현으로 교체하면 됩니다.
 
 ## 제약사항 및 알려진 이슈
 
 **빌드**
 
-- **비공개 의존성**: 위 명세만으로 `cyber_perception_msgs`를 재정의할 수는 있으나,
-  스플라인 솔버는 상당한 분량이라 그대로는 대체가 어렵습니다. 향후 최소 msgs
-  패키지 동봉과 솔버 대체를 검토 중입니다.
-- **ROS 1 Noetic은 2025년 5월 EOL**입니다. 현재 코드는 실제 데이터로 검증된 상태를
-  보존하기 위해 Noetic을 유지하고 있으며, ROS 2 포팅이 후속 작업으로 계획되어
-  있습니다. 새로 시작하는 프로젝트라면 포팅 완료를 기다리시길 권합니다.
+- **비공개 의존성이 `cyber_perception_msgs` 하나로 줄었습니다.** 위 명세대로
+  동등한 메시지를 정의하면 빌드됩니다. 최소 msgs 패키지 동봉이 후속 작업입니다.
+- **ROS 2 포팅은 실제 장비 데이터로 재검증되지 않았습니다.** 알고리즘 계층은
+  단위 테스트 34개로 덮여 있고 전 소스가 ROS 2 헤더에 대해 컴파일되지만,
+  실제 bag을 통과시킨 회귀 비교는 아직 하지 않았습니다. ROS 1에서 검증된 결과가
+  필요하면 `noetic-devel` 브랜치를 쓰십시오.
 
 **알고리즘**
 

@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# A full compile is not run here: the packages depend on ROS message
-# definitions that are not publicly distributed (see README). CI therefore
-# gates on what can be verified from the sources alone.
+# A full colcon build is not run here: the package depends on a ROS message
+# package that is not publicly distributed (see README). What does not depend
+# on it -- the geometry, motion models and curve fitting -- is compiled and
+# tested for real, on the Ubuntu release of each supported ROS 2 distro.
 
 name: ci
 
@@ -37,6 +38,38 @@ jobs:
       - name: Run release gate
         run: bash scripts/check_release_ready.sh
 
+  unit-tests:
+    name: unit tests (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, name: humble }
+          - { os: ubuntu-24.04, name: jazzy }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libgtest-dev libeigen3-dev
+      # The geometry, motion-model and curve-fitting targets have no ROS and no
+      # private dependency, so they compile and run here. A full colcon build
+      # cannot: cyber_perception_msgs is not publicly distributed.
+      - name: Build and run the ROS-free tests
+        working-directory: src/bag_modifier
+        run: |
+          g++ -std=c++17 -Wall -Wextra -O2 -I include -I /usr/include/eigen3 \
+              test/test_geometry.cc \
+              test/test_obstacle_pose_estimator.cc \
+              test/test_spline_solver.cc \
+              src/geometry/box2d.cc \
+              src/geometry/polygon_iou.cc \
+              src/track/obstacle_pose_estimator.cc \
+              src/spline/spline_solver.cc \
+              -lgtest -lgtest_main -pthread -o test_bag_modifier_geometry
+          ./test_bag_modifier_geometry
+
   cpp-format:
     name: clang-format
     runs-on: ubuntu-latest
@@ -53,7 +86,7 @@ jobs:
           fi
 
   python-lint:
-    name: ruff
+    name: ruff (launch files)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
