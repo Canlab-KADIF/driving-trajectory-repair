@@ -28,9 +28,9 @@ find_package(catkin REQUIRED COMPONENTS
   visualization_msgs
   jsk_recognition_msgs
   cyber_perception_msgs
-  utils
-  planner
 )
+
+find_package(Eigen3 REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
@@ -41,7 +41,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${utils_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 # ---------------------------------------------------------------------------
@@ -52,14 +52,15 @@ add_library(bag_modifier_geometry
   src/geometry/box2d.cc
   src/geometry/polygon_iou.cc
   src/track/obstacle_pose_estimator.cc
+  src/spline/spline_solver.cc
 )
+target_link_libraries(bag_modifier_geometry ${EIGEN3_LIBRARIES})
 
 # ---------------------------------------------------------------------------
 # Track repair. Depends on the perception messages and the spline solver.
 # ---------------------------------------------------------------------------
 add_library(bag_modifier_core
   src/ros/obstacle_conversion.cc
-  src/spline/spline_solver.cc
   src/track/track_repairer.cc
   src/bag_rewriter.cc
 )
@@ -125,6 +126,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_bag_modifier_geometry
     test/test_geometry.cc
     test/test_obstacle_pose_estimator.cc
+    test/test_spline_solver.cc
   )
   target_link_libraries(test_bag_modifier_geometry bag_modifier_geometry)
 endif()

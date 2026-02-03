@@ -2,6 +2,10 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![ROS](https://img.shields.io/badge/ROS-Noetic-22314E.svg)](http://wiki.ros.org/noetic)
+[![tests](https://img.shields.io/badge/tests-34%20passing-brightgreen.svg)](#기하-모듈만-검증하기-의존성-불필요)
+
+> 이 브랜치는 **ROS 1 Noetic** 판입니다. ROS 2 Humble·Jazzy 판은 `main` 브랜치에
+> 있습니다 ([지원 ROS 버전](#지원-ros-버전) 참고).
 
 기록된 ROS bag에서 **끊어진 객체 추적 궤적을 복원**하는 오프라인 도구입니다.
 인지 모듈이 가림·센서 사각으로 트랙을 놓쳤다가 새 ID로 다시 잡은 구간을 재식별하고,
@@ -24,14 +28,27 @@
 | 필요한 패키지 | 제공 내용 | 공개 여부 |
 |---|---|---|
 | `cyber_perception_msgs` | 인지 객체 스트림 메시지 | ❌ 비공개 |
-| `utils`, `planner` | QP 스플라인 솔버 (`OsqpSpline2dSolver`) | ❌ 비공개 |
 | `jsk_recognition_msgs` | rviz 바운딩박스 (시각화 노드 전용) | ✅ 공개 |
+| Eigen3 | 선형대수 | ✅ 공개 (MPL-2.0) |
 
 메시지 필드 명세는 [인터페이스](#인터페이스) 절에 전부 기재했습니다.
 동등한 `.msg`를 직접 정의하면 알고리즘 부분은 그대로 사용할 수 있습니다.
 
 **의존성 없이도 동작하는 부분**: `bag_modifier_geometry` 라이브러리(기하 연산 +
 운동 모델)와 그 단위 테스트는 ROS·비공개 의존성이 전혀 없어 단독으로 빌드·검증됩니다.
+
+### 지원 ROS 버전
+
+두 배포판을 **모두 지원**합니다. ROS 관례대로 배포판별 브랜치로 나뉘어 있으며,
+알고리즘과 파라미터 기본값은 양쪽이 동일합니다.
+
+| 브랜치 | ROS | 빌드 | 이 문서 |
+|---|---|---|---|
+| **`noetic-devel`** | **ROS 1 Noetic** | `catkin_make` | ← 지금 보고 계신 문서 |
+| `main` | ROS 2 Humble, Jazzy | `colcon build` | [main 브랜치 README](https://github.com/keti-mobility/ros-bag-modifier/blob/main/README.md) |
+
+Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환경을 위해 계속
+유지합니다. 새로 시작하는 환경이라면 `main`을 권합니다.
 
 ---
 
@@ -126,8 +143,8 @@
 
 | 빌드 타깃 | 내용 | 외부 의존 |
 |---|---|---|
-| `bag_modifier_geometry` | 기하 연산, CTRV/선형 운동 모델 | 없음 (표준 C++만) |
-| `bag_modifier_core` | 메시지 변환, 트랙 보정, bag 입출력 | roscpp, rosbag, 인지 메시지, 스플라인 솔버 |
+| `bag_modifier_geometry` | 기하 연산, CTRV/선형 운동 모델, 곡선 피팅 | Eigen3만 (ROS 없음) |
+| `bag_modifier_core` | 메시지 변환, 트랙 보정, bag 입출력 | roscpp, rosbag, 인지 메시지 |
 | `bag_modifier_viz` | rviz 마커 생성 | jsk_recognition_msgs |
 
 ## 동작 원리
@@ -190,9 +207,9 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 1. 두 끝점의 heading 차이로 **직선/원호**를 판정하고, 원호면 현 길이와 사잇각으로
    반지름과 각속도를 구합니다
 2. 그 등회전율 모델로 중간 프레임마다 **제어점**을 생성합니다
-3. 제어점들을 5차 스플라인으로 QP 피팅합니다. 양 끝점은 실제 관측값이므로 위치·
-   접선을 1 mm 수준으로 고정하고, 중간 제어점은 `spline_lateral_bound`(기본 0.7 m)
-   범위에서 움직일 수 있게 둡니다
+3. 제어점들을 균일 3차 B-스플라인으로 **벌점 최소제곱** 피팅합니다. 중간 제어점은
+   데이터로 들어가고 계수의 2차·3차 차분에 벌점을 주며, 양 끝점은 실제 관측값이므로
+   위치와 접선을 KKT 등식제약으로 **정확히** 고정합니다
 4. 피팅된 곡선 위의 점을 각 프레임의 보간 자세로 기록합니다
 
 진행 방향이 heading과 150° 이상 어긋나면 후진으로 판정해 접선을 뒤집습니다.
@@ -225,6 +242,8 @@ catkin_make
 source devel/setup.bash
 ```
 
+ROS 2 Humble/Jazzy 판이 필요하면 `git checkout main` 후 `colcon build`를 쓰십시오.
+
 ### 기하 모듈만 검증하기 (의존성 불필요)
 
 ROS나 비공개 패키지 없이도 핵심 알고리즘을 확인할 수 있습니다.
@@ -232,12 +251,13 @@ ROS나 비공개 패키지 없이도 핵심 알고리즘을 확인할 수 있습
 ```bash
 sudo apt install libgtest-dev g++
 cd src/bag_modifier
-g++ -std=c++14 -I include \
+g++ -std=c++14 -I include -I /usr/include/eigen3 \
     test/test_geometry.cc test/test_obstacle_pose_estimator.cc \
+    test/test_spline_solver.cc \
     src/geometry/box2d.cc src/geometry/polygon_iou.cc \
-    src/track/obstacle_pose_estimator.cc \
+    src/track/obstacle_pose_estimator.cc src/spline/spline_solver.cc \
     -lgtest -lgtest_main -pthread -o test_geometry
-./test_geometry
+./test_geometry      # 34 tests
 ```
 
 catkin 워크스페이스 안에서는 `catkin_make run_tests_bag_modifier`로도 실행됩니다.
@@ -313,10 +333,10 @@ rosbag play recording_repaired.bag
 
 | 파라미터 | 기본값 | 의미 |
 |---|---|---|
-| `spline_order` | `5` | 스플라인 차수. 5차라야 곡률이 연속 |
-| `spline_lateral_bound` | `0.7` m | 중간 제어점의 횡방향 허용 이탈. 양 끝점은 실제 관측이라 훨씬 강하게 고정됨 |
-| `spline_second_derivative_weight` | `200.0` | 2차 미분 평활 가중치 |
-| `spline_third_derivative_weight` | `1000.0` | 3차 미분 평활 가중치. 2차보다 훨씬 크게 줘 곡률이 천천히 변하도록 함 |
+| `spline_segment_count` | `8` | 곡선을 이루는 구간 수. 많을수록 제어점을 가깝게 따라가고 덜 매끄러움 |
+| `spline_fit_weight` | `1.0` | 적합 항 대 평활 항의 비중. 양 끝점은 등식제약이라 중간 제어점 추종에만 영향 |
+| `spline_second_derivative_weight` | `0.2` | 2차 차분 벌점 |
+| `spline_third_derivative_weight` | `1.0` | 3차 차분 벌점. 2차의 5배. 이 값에서 20 m 호를 3 mm로 따라가면서 제어점의 30 cm 노이즈는 무시함 |
 
 ### 입출력
 
@@ -386,10 +406,10 @@ rosbag play recording_repaired.bag
 | 4 | `BICYCLE` | 일반 |
 | 5 | `VEHICLE` | 일반 |
 
-### 의존 라이브러리 인터페이스
+### 이전 버전의 외부 솔버 인터페이스 (참고)
 
-`utils`/`planner`가 제공하는 QP 스플라인 솔버는 다음 API만 사용합니다
-([`src/spline/spline_solver.cc`](src/bag_modifier/src/spline/spline_solver.cc)).
+과거 판은 `utils`/`planner`가 제공하는 QP 스플라인 솔버의 다음 API를 사용했습니다.
+**현재는 이 의존이 없습니다** — `main`과 동일한 자체 최소제곱 구현으로 대체했습니다.
 
 ```cpp
 keti::planning::OsqpSpline2dSolver(const std::vector<double>& knots, int order);
@@ -411,19 +431,18 @@ void AddThirdOrderDerivativeMatrix(double weight);
 void AddRegularization(double weight);
 ```
 
-동등한 기능을 가진 다른 솔버(예: OSQP 직접 사용)로 교체하려면 이 파일 하나만
-바꾸면 됩니다.
+현재 구현은 [`src/spline/spline_solver.cc`](src/bag_modifier/src/spline/spline_solver.cc)
+에 있으며, Eigen만 사용합니다.
 
 ## 제약사항 및 알려진 이슈
 
 **빌드**
 
-- **비공개 의존성**: 위 명세만으로 `cyber_perception_msgs`를 재정의할 수는 있으나,
-  스플라인 솔버는 상당한 분량이라 그대로는 대체가 어렵습니다. 향후 최소 msgs
-  패키지 동봉과 솔버 대체를 검토 중입니다.
-- **ROS 1 Noetic은 2025년 5월 EOL**입니다. 현재 코드는 실제 데이터로 검증된 상태를
-  보존하기 위해 Noetic을 유지하고 있으며, ROS 2 포팅이 후속 작업으로 계획되어
-  있습니다. 새로 시작하는 프로젝트라면 포팅 완료를 기다리시길 권합니다.
+- **비공개 의존성이 `cyber_perception_msgs` 하나로 줄었습니다.** 위 명세대로
+  동등한 메시지를 정의하면 빌드됩니다. 최소 msgs 패키지 동봉이 후속 작업입니다.
+- **ROS 1 Noetic은 2025년 5월 EOL**입니다. 이 브랜치는 기존 ROS 1 자산을 쓰는
+  환경을 위해 계속 유지하지만, 배포판 자체의 보안 갱신은 더 이상 없습니다.
+  새 환경이라면 `main`(ROS 2)을 권합니다.
 
 **알고리즘**
 

@@ -72,9 +72,13 @@ void LoadOptions(const ros::NodeHandle& node,
         static_cast<std::size_t>(history_size);
   }
 
-  LoadParam(node, "spline_order", &options->repairer.spline.order);
-  LoadParam(node, "spline_lateral_bound",
-            &options->repairer.spline.lateral_bound);
+  int segment_count = static_cast<int>(options->repairer.spline.segment_count);
+  LoadParam(node, "spline_segment_count", &segment_count);
+  if (segment_count > 0) {
+    options->repairer.spline.segment_count =
+        static_cast<std::size_t>(segment_count);
+  }
+  LoadParam(node, "spline_fit_weight", &options->repairer.spline.fit_weight);
   LoadParam(node, "spline_second_derivative_weight",
             &options->repairer.spline.second_derivative_weight);
   LoadParam(node, "spline_third_derivative_weight",

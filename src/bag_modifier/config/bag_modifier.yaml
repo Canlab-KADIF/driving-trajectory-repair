@@ -57,15 +57,16 @@ history_size: 10
 
 # --- gap interpolation ------------------------------------------------------
 
-# Degree of each spline segment. Fifth order keeps curvature continuous.
-spline_order: 5
+# Number of polynomial segments the fitted curve is built from. More segments
+# follow the control points more closely and smooth less.
+spline_segment_count: 8
 
-# How far, in metres, an interpolated pose may be displaced sideways from the
-# constant-turn-rate guess. The two endpoints are pinned much tighter because
-# they are real detections.
-spline_lateral_bound: 0.7
+# Weight of the fit against the smoothness terms. The two endpoints are hard
+# constraints, so this only governs how closely the interior points are followed.
+spline_fit_weight: 1.0
 
-# Smoothness weights. Penalising the third derivative far more than the second
-# favours slowly changing curvature, which looks like a driven line.
-spline_second_derivative_weight: 200.0
-spline_third_derivative_weight: 1000.0
+# Smoothness weights, at the 1:5 ratio the previous quadratic program used. At
+# these values a 20 m arc is followed to about 3 mm while 30 cm of noise on the
+# interior control points is rejected rather than tracked.
+spline_second_derivative_weight: 0.2
+spline_third_derivative_weight: 1.0

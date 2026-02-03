@@ -28,15 +28,14 @@
   <!-- Visualisation only: the offline tool builds without it -->
   <depend>jsk_recognition_msgs</depend>
 
+  <depend>eigen</depend>
+
   <!--
-    Not publicly distributed. cyber_perception_msgs carries the recorded
-    perception stream; utils and planner provide the quadratic-programming
-    spline solver. See the Dependencies section of README.md for the message
-    field layout, so an equivalent package can be defined locally.
+    Not publicly distributed: cyber_perception_msgs carries the recorded
+    perception stream. See the Dependencies section of README.md for the
+    message field layout, so an equivalent package can be defined locally.
   -->
   <depend>cyber_perception_msgs</depend>
-  <depend>utils</depend>
-  <depend>planner</depend>
 
   <test_depend>rosunit</test_depend>
 </package>
