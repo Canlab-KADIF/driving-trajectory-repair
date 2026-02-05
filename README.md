@@ -1,6 +1,7 @@
 # ros-bag-modifier
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![ROS 1](https://img.shields.io/badge/ROS%201-Noetic-22314E.svg)](http://wiki.ros.org/noetic)
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy-22314E.svg)](https://docs.ros.org)
 [![tests](https://img.shields.io/badge/tests-34%20passing-brightgreen.svg)](#기하-모듈만-검증하기-의존성-불필요)
 
@@ -41,10 +42,22 @@
 
 ### 지원 ROS 버전
 
-| 브랜치 | ROS | 상태 |
-|---|---|---|
-| `main` | **ROS 2 Humble, Jazzy** | 활성 |
-| `noetic-devel` | ROS 1 Noetic | 유지보수만 (Noetic은 2025년 5월 EOL) |
+**ROS 1과 ROS 2를 모두 지원합니다.** ROS 관례대로 배포판별 브랜치로 나뉘어 있으며,
+알고리즘·파라미터 기본값·단위 테스트는 양쪽이 동일합니다. 두 브랜치 모두 비공개
+의존은 `cyber_perception_msgs` 하나뿐입니다.
+
+| 브랜치 | ROS | Ubuntu | 빌드 | 문서 |
+|---|---|---|---|---|
+| **`main`** | **ROS 2 Humble, Jazzy** | 22.04 / 24.04 | `colcon build` | ← 지금 보고 계신 문서 |
+| **`noetic-devel`** | **ROS 1 Noetic** | 20.04 | `catkin_make` | [noetic-devel README](https://github.com/keti-mobility/ros-bag-modifier/blob/noetic-devel/README.md) |
+
+```bash
+git checkout main           # ROS 2 Humble / Jazzy
+git checkout noetic-devel   # ROS 1 Noetic
+```
+
+Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환경을 위해 계속
+유지합니다. 새로 시작하는 환경이라면 `main`을 권합니다.
 
 ---
 
@@ -242,8 +255,8 @@ colcon build
 source install/setup.bash
 ```
 
-ROS 1 Noetic 버전이 필요하면 `git checkout noetic-devel` 후 `catkin_make`를
-쓰십시오.
+ROS 1 Noetic 환경이면 `git checkout noetic-devel` 후 `catkin_make`를 쓰십시오.
+기능과 파라미터는 동일합니다.
 
 ### 기하 모듈만 검증하기 (의존성 불필요)
 
@@ -449,10 +462,12 @@ ROS 1 브랜치를 계속 쓰면서 이 의존을 없애려면, 해당 브랜치
 
 - **비공개 의존성이 `cyber_perception_msgs` 하나로 줄었습니다.** 위 명세대로
   동등한 메시지를 정의하면 빌드됩니다. 최소 msgs 패키지 동봉이 후속 작업입니다.
-- **ROS 2 포팅은 실제 장비 데이터로 재검증되지 않았습니다.** 알고리즘 계층은
-  단위 테스트 34개로 덮여 있고 전 소스가 ROS 2 헤더에 대해 컴파일되지만,
-  실제 bag을 통과시킨 회귀 비교는 아직 하지 않았습니다. ROS 1에서 검증된 결과가
-  필요하면 `noetic-devel` 브랜치를 쓰십시오.
+- **ROS 2 판은 실제 장비 데이터로 재검증되지 않았습니다.** 알고리즘 계층은 단위
+  테스트 34개로 덮여 있고 전 소스가 ROS 2 헤더에 대해 컴파일되지만, 실제 bag을
+  통과시킨 회귀 비교는 아직 하지 않았습니다. 실차 데이터로 검증된 결과가 필요하면
+  `noetic-devel`(ROS 1) 브랜치를 쓰십시오.
+- **두 브랜치는 별도로 관리됩니다.** 알고리즘 수정은 양쪽에 반영해야 하며, 현재는
+  수동으로 합니다.
 
 **알고리즘**
 
