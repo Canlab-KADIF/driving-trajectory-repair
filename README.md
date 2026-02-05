@@ -39,13 +39,18 @@
 
 ### 지원 ROS 버전
 
-두 배포판을 **모두 지원**합니다. ROS 관례대로 배포판별 브랜치로 나뉘어 있으며,
+**ROS 1과 ROS 2를 모두 지원합니다.** ROS 관례대로 배포판별 브랜치로 나뉘어 있으며,
 알고리즘과 파라미터 기본값은 양쪽이 동일합니다.
 
-| 브랜치 | ROS | 빌드 | 이 문서 |
-|---|---|---|---|
-| **`noetic-devel`** | **ROS 1 Noetic** | `catkin_make` | ← 지금 보고 계신 문서 |
-| `main` | ROS 2 Humble, Jazzy | `colcon build` | [main 브랜치 README](https://github.com/keti-mobility/ros-bag-modifier/blob/main/README.md) |
+| 브랜치 | ROS | Ubuntu | 빌드 | 문서 |
+|---|---|---|---|---|
+| **`noetic-devel`** | **ROS 1 Noetic** | 20.04 | `catkin_make` | ← 지금 보고 계신 문서 |
+| **`main`** | **ROS 2 Humble, Jazzy** | 22.04 / 24.04 | `colcon build` | [main README](https://github.com/keti-mobility/ros-bag-modifier/blob/main/README.md) |
+
+```bash
+git checkout noetic-devel   # ROS 1 Noetic
+git checkout main           # ROS 2 Humble / Jazzy
+```
 
 Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환경을 위해 계속
 유지합니다. 새로 시작하는 환경이라면 `main`을 권합니다.
