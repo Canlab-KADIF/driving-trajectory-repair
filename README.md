@@ -488,7 +488,7 @@ operations는 GPL로 배포되어 Apache-2.0과 호환되지 않으므로, 볼�
 지원을 받아 수행된 연구임 (RS-2023-00232046, 비정상 주행 데이터 전송을 통한
 클라우드 기반 원인 분석 기술 개발).
 
-This work was supported by the Institute of Information & Communications
-Technology Planning & Evaluation (IITP) grant funded by the Korea government
-(MSIT) (No. RS-2023-00232046, Development of Cloud-based Cause Analysis
-Technology via Abnormal Driving Data Transmission).
+This work was partly supported by Institute of Information & communications
+Technology Planning & Evaluation (IITP) grant funded by the Korea
+government(MSIT) (No.2023-00232046, Development of cloud-based cause analysis
+technology by transmission of abnormal driving data)
