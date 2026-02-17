@@ -84,16 +84,30 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환
 
 ## 파이프라인 내 위치
 
-```
- [실차 주행]
-     │  트리거 발생 시 센서/인지/제어 데이터 동기 로깅
-     ▼
- recording/ ──────────▶ ★ ros-bag-modifier ────────▶ recording_repaired/
-                          트랙 재식별 + 궤적 보간                │
-                                                              │ ros2 bag play
-                                                              ▼
-                                                    bag-to-sim-interface
-                                                    시뮬레이터 주행상황 재현
+```mermaid
+%%{init: {"theme":"base","themeVariables":{
+  "lineColor":"#1F2937","edgeLabelBackground":"#FFFFFF",
+  "fontFamily":"-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"}}}%%
+flowchart TD
+    drive["실차 주행<br/>트리거 발생 시 동기 로깅"]
+    raw[("recording/<br/>원본 기록")]
+    fix["ros-bag-modifier<br/>트랙 재식별 · 궤적 보간"]
+    fixed[("recording_repaired/<br/>복원된 기록")]
+    bridge["bag-to-sim-interface<br/>액터 생성 · 이동 · 소멸"]
+    sim(["KADIF 시뮬레이터<br/>재현 장면"])
+
+    drive --> raw
+    raw --> fix
+    fix --> fixed
+    fixed -- "ros2 bag play" --> bridge
+    bridge --> sim
+
+    classDef here fill:#2563EB,stroke:#2563EB,color:#FFFFFF
+    classDef data fill:#F3F4F6,stroke:#1F2937,color:#1F2937
+    classDef step fill:#FFFFFF,stroke:#1F2937,color:#1F2937
+    class fix here
+    class raw,fixed data
+    class drive,bridge,sim step
 ```
 
 두 번째 단계는 별도 저장소인 [bag-to-sim-interface](https://github.com/keti-mobility/bag-to-sim-interface)에 있습니다. 두 저장소는 코드를 공유하지 않고 **토픽·메시지 계약만 공유**합니다.
@@ -102,7 +116,8 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환
 
 의존 방향은 항상 아래(도메인)를 향합니다. `geometry`와 `spline`은 ROS를 전혀 모르며, 그래서 ROS 없이 빌드하고 테스트할 수 있습니다.
 
-![ros-bag-modifier 계층 구조: 실행 파일 → 어댑터 → 도메인 → ROS 의존이 없는 geometry/spline 코어](docs/architecture.png)
+<img src="docs/architecture.png" width="820"
+     alt="ros-bag-modifier 계층 구조: 실행 파일 → 어댑터 → 도메인 → ROS 의존이 없는 geometry/spline 코어">
 
 | 빌드 타깃 | 내용 | 외부 의존 |
 |---|---|---|
