@@ -56,7 +56,7 @@ find src -name '*.h' -o -name '*.cc' | xargs clang-format -i
 Use imperative mood and a short scope prefix:
 
 ```
-bag_modifier: replace CGAL polygon intersection with an internal implementation
+driving_trajectory_repair: replace CGAL polygon intersection with an internal implementation
 docs: document the PerceptionObstacle message layout
 ```
 

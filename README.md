@@ -1,4 +1,4 @@
-# ros-bag-modifier
+# driving-trajectory-repair
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![ROS](https://img.shields.io/badge/ROS-Noetic-22314E.svg)](http://wiki.ros.org/noetic)
@@ -24,7 +24,7 @@
 
 메시지 필드 명세는 [인터페이스](#인터페이스) 절에 전부 기재했습니다. 동등한 `.msg`를 직접 정의하면 알고리즘 부분은 그대로 사용할 수 있습니다.
 
-**의존성 없이도 동작하는 부분**: `bag_modifier_geometry` 라이브러리(기하 연산 + 운동 모델)와 그 단위 테스트는 ROS·비공개 의존성이 전혀 없어 단독으로 빌드·검증됩니다.
+**의존성 없이도 동작하는 부분**: `driving_trajectory_repair_geometry` 라이브러리(기하 연산 + 운동 모델)와 그 단위 테스트는 ROS·비공개 의존성이 전혀 없어 단독으로 빌드·검증됩니다.
 
 ### 지원 ROS 버전
 
@@ -33,7 +33,7 @@
 | 브랜치 | ROS | Ubuntu | 빌드 | 문서 |
 |---|---|---|---|---|
 | **`noetic-devel`** | **ROS 1 Noetic** | 20.04 | `catkin_make` | ← 지금 보고 계신 문서 |
-| **`main`** | **ROS 2 Humble, Jazzy** | 22.04 / 24.04 | `colcon build` | [main README](https://github.com/keti-mobility/ros-bag-modifier/blob/main/README.md) |
+| **`main`** | **ROS 2 Humble, Jazzy** | 22.04 / 24.04 | `colcon build` | [main README](https://github.com/keti-mobility/driving-trajectory-repair/blob/main/README.md) |
 
 ```bash
 git checkout noetic-devel   # ROS 1 Noetic
@@ -90,7 +90,7 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환
 flowchart TD
     drive["실차 주행<br/>트리거 발생 시 동기 로깅"]
     raw[("recording.bag<br/>원본 기록")]
-    fix["ros-bag-modifier<br/>트랙 재식별 · 궤적 보간"]
+    fix["driving-trajectory-repair<br/>트랙 재식별 · 궤적 보간"]
     fixed[("recording_repaired.bag<br/>복원된 기록")]
     bridge["bag-to-sim-interface<br/>액터 생성 · 이동 · 소멸"]
     sim(["KADIF 시뮬레이터<br/>재현 장면"])
@@ -118,7 +118,7 @@ flowchart TD
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  실행 파일                                                     │
-│  bag_modifier   estimation_visualizer   repaired_bag_visualizer│
+│  driving_trajectory_repair   estimation_visualizer   repaired_trajectory_visualizer│
 └───────┬──────────────────┬───────────────────────┬───────────┘
         │                  │                       │
         ▼                  ▼                       ▼
@@ -145,9 +145,9 @@ flowchart TD
 
 | 빌드 타깃 | 내용 | 외부 의존 |
 |---|---|---|
-| `bag_modifier_geometry` | 기하 연산, CTRV/선형 운동 모델, 곡선 피팅 | Eigen3만 (ROS 없음) |
-| `bag_modifier_core` | 메시지 변환, 트랙 보정, bag 입출력 | roscpp, rosbag, 인지 메시지 |
-| `bag_modifier_viz` | rviz 마커 생성 | jsk_recognition_msgs |
+| `driving_trajectory_repair_geometry` | 기하 연산, CTRV/선형 운동 모델, 곡선 피팅 | Eigen3만 (ROS 없음) |
+| `driving_trajectory_repair_core` | 메시지 변환, 트랙 보정, bag 입출력 | roscpp, rosbag, 인지 메시지 |
+| `driving_trajectory_repair_viz` | rviz 마커 생성 | jsk_recognition_msgs |
 
 ## 동작 원리
 
@@ -226,8 +226,8 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 ### 빌드
 
 ```bash
-git clone https://github.com/keti-mobility/ros-bag-modifier.git
-cd ros-bag-modifier
+git clone https://github.com/keti-mobility/driving-trajectory-repair.git
+cd driving-trajectory-repair
 
 # 비공개 의존 패키지를 src/ 아래에 함께 두어야 합니다
 source /opt/ros/noetic/setup.bash
@@ -243,7 +243,7 @@ ROS나 비공개 패키지 없이도 핵심 알고리즘을 확인할 수 있습
 
 ```bash
 sudo apt install libgtest-dev g++
-cd src/bag_modifier
+cd src/driving_trajectory_repair
 g++ -std=c++14 -I include -I /usr/include/eigen3 \
     test/test_geometry.cc test/test_obstacle_pose_estimator.cc \
     test/test_spline_solver.cc \
@@ -253,7 +253,7 @@ g++ -std=c++14 -I include -I /usr/include/eigen3 \
 ./test_geometry      # 34 tests
 ```
 
-catkin 워크스페이스 안에서는 `catkin_make run_tests_bag_modifier`로도 실행됩니다.
+catkin 워크스페이스 안에서는 `catkin_make run_tests_driving_trajectory_repair`로도 실행됩니다.
 
 ## 사용법
 
@@ -261,10 +261,10 @@ catkin 워크스페이스 안에서는 `catkin_make run_tests_bag_modifier`로�
 
 ```bash
 # launch 사용 (권장 — 파라미터 파일이 함께 적용됨)
-roslaunch bag_modifier bag_modifier.launch bag:=/path/to/recording.bag
+roslaunch driving_trajectory_repair repair_trajectory.launch bag:=/path/to/recording.bag
 
 # 직접 실행
-rosrun bag_modifier bag_modifier /path/to/recording.bag
+rosrun driving_trajectory_repair repair_trajectory /path/to/recording.bag
 ```
 
 출력 두 개가 생성됩니다. **원본 bag은 수정되지 않습니다.**
@@ -288,7 +288,7 @@ rosrun bag_modifier bag_modifier /path/to/recording.bag
 ### rviz로 확인
 
 ```bash
-roslaunch bag_modifier visualize.launch x_offset:=332950.0 y_offset:=4140495.0
+roslaunch driving_trajectory_repair visualize.launch x_offset:=332950.0 y_offset:=4140495.0
 rosbag play recording_repaired.bag
 ```
 
@@ -297,11 +297,11 @@ rosbag play recording_repaired.bag
 | 노드 | 보여주는 것 |
 |---|---|
 | `estimation_visualizer` | 사라진 트랙의 **예측 자세** — 복원 전에 운동 모델을 검증 |
-| `repaired_bag_visualizer` | 복원된 bag의 객체 — 박스, 클래스, ID, 진행/속도/가속도 화살표 |
+| `repaired_trajectory_visualizer` | 복원된 bag의 객체 — 박스, 클래스, ID, 진행/속도/가속도 화살표 |
 
 ## 파라미터
 
-전부 [`config/bag_modifier.yaml`](src/bag_modifier/config/bag_modifier.yaml)에 있으며 launch가 private 네임스페이스로 올립니다.
+전부 [`config/driving_trajectory_repair.yaml`](src/driving_trajectory_repair/config/driving_trajectory_repair.yaml)에 있으며 launch가 private 네임스페이스로 올립니다.
 
 ### 재식별 게이팅
 
@@ -343,18 +343,18 @@ rosbag play recording_repaired.bag
 
 | 노드 | 방향 | 토픽 | 타입 |
 |---|---|---|---|
-| `bag_modifier` | bag 읽기 | `/obstacles` | `cyber_perception_msgs/PerceptionObstacles` |
-| `bag_modifier` | bag 쓰기 | `/obstacles`, `/obstacles_modified` | 〃 |
+| `driving_trajectory_repair` | bag 읽기 | `/obstacles` | `cyber_perception_msgs/PerceptionObstacles` |
+| `driving_trajectory_repair` | bag 쓰기 | `/obstacles`, `/obstacles_modified` | 〃 |
 | `estimation_visualizer` | 구독 | `obstacles` | 〃 |
 | `estimation_visualizer` | 발행 | `obstacles_estimation_vis` | `jsk_recognition_msgs/BoundingBoxArray` |
 | `estimation_visualizer` | 발행 | `obstacles_estimation_vis_vel` | `visualization_msgs/MarkerArray` |
-| `repaired_bag_visualizer` | 구독 | `obstacles_modified` | `cyber_perception_msgs/PerceptionObstacles` |
-| `repaired_bag_visualizer` | 발행 | `obstacles_vis_modified` | `jsk_recognition_msgs/BoundingBoxArray` |
-| `repaired_bag_visualizer` | 발행 | `obstacles_vis_vel_modified`, `converter_vis_vel`, `converter_vis_accel` | `visualization_msgs/MarkerArray` |
+| `repaired_trajectory_visualizer` | 구독 | `obstacles_modified` | `cyber_perception_msgs/PerceptionObstacles` |
+| `repaired_trajectory_visualizer` | 발행 | `obstacles_vis_modified` | `jsk_recognition_msgs/BoundingBoxArray` |
+| `repaired_trajectory_visualizer` | 발행 | `obstacles_vis_vel_modified`, `converter_vis_vel`, `converter_vis_accel` | `visualization_msgs/MarkerArray` |
 
 ### 의존 메시지 명세
 
-`cyber_perception_msgs`는 공개 배포되지 않습니다. 아래는 이 패키지가 **실제로 읽고 쓰는 필드**로, 동등한 메시지를 직접 정의할 때의 명세입니다. 사용처는 [`src/ros/obstacle_conversion.cc`](src/bag_modifier/src/ros/obstacle_conversion.cc) 한 곳에 모여 있으므로, 다른 메시지로 교체하려면 그 파일만 고치면 됩니다.
+`cyber_perception_msgs`는 공개 배포되지 않습니다. 아래는 이 패키지가 **실제로 읽고 쓰는 필드**로, 동등한 메시지를 직접 정의할 때의 명세입니다. 사용처는 [`src/ros/obstacle_conversion.cc`](src/driving_trajectory_repair/src/ros/obstacle_conversion.cc) 한 곳에 모여 있으므로, 다른 메시지로 교체하려면 그 파일만 고치면 됩니다.
 
 **`PerceptionObstacles`**
 
@@ -418,7 +418,7 @@ void AddThirdOrderDerivativeMatrix(double weight);
 void AddRegularization(double weight);
 ```
 
-현재 구현은 [`src/spline/spline_solver.cc`](src/bag_modifier/src/spline/spline_solver.cc) 에 있으며, Eigen만 사용합니다.
+현재 구현은 [`src/spline/spline_solver.cc`](src/driving_trajectory_repair/src/spline/spline_solver.cc) 에 있으며, Eigen만 사용합니다.
 
 ## 제약사항 및 알려진 이슈
 
@@ -430,7 +430,7 @@ void AddRegularization(double weight);
 **알고리즘**
 
 - **탐욕적 매칭**입니다. 전역 최적 할당(헝가리안 등)이 아니므로, 비슷한 점수의 후보가 밀집한 혼잡 장면에서는 최적이 아닌 짝이 선택될 수 있습니다.
-- **오프라인 전용**입니다. `bag_modifier`는 전체 프레임을 메모리에 올린 뒤 보간하므로, 긴 녹화에서는 메모리 사용량이 프레임 수에 비례해 증가합니다. 실시간 사용 불가.
+- **오프라인 전용**입니다. `driving_trajectory_repair`는 전체 프레임을 메모리에 올린 뒤 보간하므로, 긴 녹화에서는 메모리 사용량이 프레임 수에 비례해 증가합니다. 실시간 사용 불가.
 - **정량 평가가 없습니다.** 재식별 정확도(precision/recall)를 측정한 결과가 아직 없어, 파라미터 기본값은 실제 녹화 데이터에 대한 육안 검증으로 정해졌습니다. 다른 인지 스택·다른 주행 환경에서는 재조정이 필요할 수 있습니다.
 - **z 좌표는 보간하지 않습니다.** 보간 자세의 높이는 시작 객체의 값을 그대로 씁니다. 경사로·고가도로 구간에서는 부정확할 수 있습니다.
 - 가속도는 보간 자세에 채워지지 않아 0으로 남습니다.
@@ -442,11 +442,11 @@ void AddRegularization(double weight);
 ## 인용
 
 ```bibtex
-@software{keti_ros_bag_modifier,
-  title  = {ros-bag-modifier: Trajectory repair for recorded autonomous driving perception data},
+@software{keti_ros_driving_trajectory_repair,
+  title  = {driving-trajectory-repair: Trajectory repair for recorded autonomous driving perception data},
   author = {{Korea Electronics Technology Institute}},
   year   = {2026},
-  url    = {https://github.com/keti-mobility/ros-bag-modifier},
+  url    = {https://github.com/keti-mobility/driving-trajectory-repair},
   note   = {Developed under IITP grant RS-2023-00232046}
 }
 ```

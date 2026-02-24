@@ -1,4 +1,4 @@
-ros-bag-modifier
+driving-trajectory-repair
 Copyright 2026 Korea Electronics Technology Institute (KETI)
 
 This product includes software developed at
@@ -56,4 +56,4 @@ CGAL (Computational Geometry Algorithms Library). CGAL's Boolean set operations
 are distributed under the GNU General Public License, which is incompatible
 with the Apache License 2.0 used here. That dependency has been removed and
 replaced by an internal convex-polygon implementation
-(`include/bag_modifier/geometry/polygon_iou.h`).
+(`include/driving_trajectory_repair/geometry/polygon_iou.h`).
