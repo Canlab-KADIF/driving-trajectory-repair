@@ -57,7 +57,7 @@ jobs:
       # private dependency, so they compile and run here. A full colcon build
       # cannot: cyber_perception_msgs is not publicly distributed.
       - name: Build and run the ROS-free tests
-        working-directory: src/bag_modifier
+        working-directory: src/driving_trajectory_repair
         run: |
           g++ -std=c++17 -Wall -Wextra -O2 -I include -I /usr/include/eigen3 \
               test/test_geometry.cc \
@@ -67,8 +67,8 @@ jobs:
               src/geometry/polygon_iou.cc \
               src/track/obstacle_pose_estimator.cc \
               src/spline/spline_solver.cc \
-              -lgtest -lgtest_main -pthread -o test_bag_modifier_geometry
-          ./test_bag_modifier_geometry
+              -lgtest -lgtest_main -pthread -o test_driving_trajectory_repair
+          ./test_driving_trajectory_repair
 
   cpp-format:
     name: clang-format

@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>ros-bag-modifier architecture</title>
+<title>driving-trajectory-repair architecture</title>
 <style>
   :root {
     --ink:    #1F2937;   /* text, borders, arrows */
@@ -30,9 +30,9 @@
   .note     { font-size: 11.5px; fill: var(--accent); opacity: .9; }
 </style>
 
-<svg width="900" height="580" viewBox="0 0 900 580"
+<svg width="960" height="580" viewBox="0 0 960 580"
      xmlns="http://www.w3.org/2000/svg" role="img"
-     aria-label="ros-bag-modifier 계층 구조도">
+     aria-label="driving-trajectory-repair 계층 구조도">
   <defs>
     <marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -43,15 +43,15 @@
   <!-- ---------- L1 executables ---------- -->
   <text class="lane" x="40" y="34">실행 파일</text>
   <rect class="box" x="40" y="46" width="252" height="58" rx="6"/>
-  <text class="title"   x="58" y="72">bag_modifier</text>
-  <text class="caption" x="58" y="92">bag 복원 (배치)</text>
+  <text class="title"   x="58" y="72">repair_trajectory</text>
+  <text class="caption" x="58" y="92">궤적 복원 (배치)</text>
 
   <rect class="box" x="312" y="46" width="262" height="58" rx="6"/>
   <text class="title"   x="330" y="72">estimation_visualizer</text>
   <text class="caption" x="330" y="92">예측 자세 rviz2</text>
 
-  <rect class="box" x="594" y="46" width="266" height="58" rx="6"/>
-  <text class="title"   x="612" y="72">repaired_bag_visualizer</text>
+  <rect class="box" x="594" y="46" width="306" height="58" rx="6"/>
+  <text class="title"   x="612" y="72">repaired_trajectory_visualizer</text>
   <text class="caption" x="612" y="92">복원 결과 rviz2</text>
 
   <!-- ---------- L2 adapters ---------- -->
@@ -64,7 +64,7 @@
   <text class="title"   x="330" y="190">ros/obstacle_conversion</text>
   <text class="caption" x="330" y="210">msg ↔ 도메인 변환</text>
 
-  <rect class="box" x="594" y="164" width="266" height="58" rx="6"/>
+  <rect class="box" x="594" y="164" width="306" height="58" rx="6"/>
   <text class="title"   x="612" y="190">viz/marker_style</text>
   <text class="caption" x="612" y="210">rviz2 마커 생성</text>
 
@@ -74,33 +74,33 @@
   <text class="title"   x="58" y="308">track/track_repairer</text>
   <text class="caption" x="58" y="328">재식별 · 갭 채우기 · ID 통일</text>
 
-  <rect class="box" x="470" y="282" width="390" height="58" rx="6"/>
+  <rect class="box" x="470" y="282" width="430" height="58" rx="6"/>
   <text class="title"   x="488" y="308">track/obstacle_pose_estimator</text>
   <text class="caption" x="488" y="328">정지 · 선형 · CTRV 운동 모델</text>
 
   <!-- ---------- L4 ROS-free core ---------- -->
-  <rect class="band" x="26" y="392" width="848" height="146" rx="10"/>
+  <rect class="band" x="26" y="392" width="908" height="146" rx="10"/>
 
   <rect class="core" x="40" y="416" width="410" height="58" rx="6"/>
   <text class="title-c"   x="58" y="442">geometry/</text>
   <text class="caption-c" x="58" y="462">vec2d · box2d · polygon_iou · angle_math</text>
 
-  <rect class="core" x="470" y="416" width="390" height="58" rx="6"/>
+  <rect class="core" x="470" y="416" width="430" height="58" rx="6"/>
   <text class="title-c"   x="488" y="442">spline/spline_solver</text>
   <text class="caption-c" x="488" y="462">벌점 최소제곱 곡선 피팅 (Eigen)</text>
 
-  <text class="note"    x="58" y="504">bag_modifier_geometry — ROS 의존 0 · Eigen3만 · 단위 테스트 34개</text>
+  <text class="note"    x="58" y="504">driving_trajectory_repair_geometry — ROS 의존 0 · Eigen3만 · 단위 테스트 34개</text>
   <text class="caption" x="58" y="524">의존 방향은 항상 아래(도메인)를 향하며, 아래 계층은 위를 모릅니다.</text>
 
   <!-- ---------- flow ---------- -->
   <path class="flow" d="M166,104 L166,158" marker-end="url(#a-ink)"/>
   <path class="flow" d="M443,104 L443,158" marker-end="url(#a-ink)"/>
-  <path class="flow" d="M727,104 L727,158" marker-end="url(#a-ink)"/>
+  <path class="flow" d="M747,104 L747,158" marker-end="url(#a-ink)"/>
 
   <path class="flow" d="M166,222 L166,276" marker-end="url(#a-ink)"/>
   <path class="flow" d="M443,222 L443,276" marker-end="url(#a-ink)"/>
-  <path class="flow" d="M727,222 C727,250 700,250 665,276" marker-end="url(#a-ink)"/>
+  <path class="flow" d="M747,222 C747,252 720,252 685,276" marker-end="url(#a-ink)"/>
 
   <path class="flow" d="M245,340 L245,410" marker-end="url(#a-ink)"/>
-  <path class="flow" d="M665,340 L665,410" marker-end="url(#a-ink)"/>
+  <path class="flow" d="M685,340 L685,410" marker-end="url(#a-ink)"/>
 </svg>
