@@ -92,7 +92,7 @@ flowchart TD
     raw[("recording.bag<br/>원본 기록")]
     fix["driving-trajectory-repair<br/>트랙 재식별 · 궤적 보간"]
     fixed[("recording_repaired.bag<br/>복원된 기록")]
-    bridge["bag-to-sim-interface<br/>액터 생성 · 이동 · 소멸"]
+    bridge["driving-scene-replay<br/>액터 생성 · 이동 · 소멸"]
     sim(["KADIF 시뮬레이터<br/>재현 장면"])
 
     drive --> raw
@@ -109,7 +109,7 @@ flowchart TD
     class drive,bridge,sim step
 ```
 
-두 번째 단계는 별도 저장소인 [bag-to-sim-interface](https://github.com/keti-mobility/bag-to-sim-interface)에 있습니다. 두 저장소는 코드를 공유하지 않고 **토픽·메시지 계약만 공유**합니다.
+두 번째 단계는 별도 저장소인 [driving-scene-replay](https://github.com/keti-mobility/driving-scene-replay)에 있습니다. 두 저장소는 코드를 공유하지 않고 **토픽·메시지 계약만 공유**합니다.
 
 ## 아키텍처
 
