@@ -5,53 +5,38 @@
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy-22314E.svg)](https://docs.ros.org)
 [![tests](https://img.shields.io/badge/tests-34%20passing-brightgreen.svg)](#기하-모듈만-검증하기-의존성-불필요)
 
-기록된 ROS bag에서 **끊어진 객체 추적 궤적을 복원**하는 오프라인 도구입니다. 인지 모듈이 가림·센서 사각으로 트랙을 놓쳤다가 새 ID로 다시 잡은 구간을 재식별하고, 그 사이 빈 구간을 스플라인으로 보간해 하나의 연속된 궤적으로 되돌립니다.
+자율주행 차량에서 취득된 주행 데이터 중 인지 결과의 **끊어진 도로 이용자(차량, 보행자, 자전거 등) 궤적을 복원**하는 오프라인 SW입니다. 인지 모듈이 가림·센서 사각으로 트랙을 놓쳤다가 새로운 ID로 다시 잡은 구간을 재식별하고, 그 사이 빈 구간을 스플라인으로 보간해 하나의 연속된 궤적으로 되돌리는 전처리 SW 입니다.
 
-> **English** — An offline tool that repairs broken object-tracking trajectories in recorded ROS bags. When a perception stack loses a track through occlusion and re-acquires it under a fresh id, downstream analysis sees two short trajectories instead of one. This tool re-identifies the pair and fills the gap with spline-interpolated poses, producing a bag that can be replayed as a continuous driving scenario.
-
----
-
-## ⚠️ 먼저 읽어주세요 — 빌드 전제조건
-
-**이 패키지는 공개 배포되지 않은 ROS 메시지 패키지 하나에 의존합니다.** `git clone` 후 바로 빌드되지 않습니다.
-
-| 필요한 패키지 | 제공 내용 | 공개 여부 |
-|---|---|---|
-| `cyber_perception_msgs` | 인지 객체 스트림 메시지 | ❌ 비공개 |
-| `rclcpp`, `rosbag2_cpp`, `visualization_msgs` | ROS 2 기본 | ✅ 공개 |
-| Eigen3 | 선형대수 | ✅ 공개 (MPL-2.0) |
-
-메시지 필드 명세는 [인터페이스](#인터페이스) 절에 전부 기재했습니다. 동등한 `.msg`를 직접 정의하면 그대로 사용할 수 있습니다.
-
-이전 버전은 QP 스플라인 솔버(`utils`/`planner`)와 `jsk_recognition_msgs`에도 의존했습니다. 전자는 자체 최소제곱 구현으로 대체했고 후자는 표준 `visualization_msgs`로 바꿔서, **비공개 의존이 메시지 하나로 줄었습니다.**
-
-**의존성 없이도 동작하는 부분**: `driving_trajectory_repair_geometry` 라이브러리(기하 연산 + 운동 모델 + 곡선 피팅)와 그 단위 테스트 34개는 ROS·비공개 의존성이 전혀 없어 단독으로 빌드·검증됩니다.
+> **English** - An offline tool that repairs broken object-tracking trajectories in recorded driving data. When a perception stack loses a track through occlusion and re-acquires it under a fresh id, downstream analysis sees two short trajectories instead of one. This tool re-identifies the pair and fills the gap with spline-interpolated poses, producing a recording that can be replayed as a continuous driving scenario.
 
 ### 지원 ROS 버전
 
-**ROS 1과 ROS 2를 모두 지원합니다.** ROS 관례대로 배포판별 브랜치로 나뉘어 있으며, 알고리즘·파라미터 기본값·단위 테스트는 양쪽이 동일합니다. 두 브랜치 모두 비공개 의존은 `cyber_perception_msgs` 하나뿐입니다.
+**ROS 1과 ROS 2를 모두 지원합니다.** ROS 관례대로 배포판별 브랜치로 나뉘어 있으며, 알고리즘·파라미터 기본값·단위 테스트는 양쪽이 동일합니다.
 
-| 브랜치 | ROS | Ubuntu | 빌드 | 문서 |
+| 브랜치 | ROS | Ubuntu | C++ | 빌드 |
 |---|---|---|---|---|
-| **`main`** | **ROS 2 Humble, Jazzy** | 22.04 / 24.04 | `colcon build` | ← 지금 보고 계신 문서 |
-| **`noetic-devel`** | **ROS 1 Noetic** | 20.04 | `catkin_make` | [noetic-devel README](https://github.com/keti-mobility/driving-trajectory-repair/blob/noetic-devel/README.md) |
+| **`main`** | **ROS 2 Humble, Jazzy** | 22.04 / 24.04 | 17 | `colcon build` |
+| **`noetic-devel`** | **ROS 1 Noetic** | 20.04 | 14 | `catkin_make` |
 
 ```bash
 git checkout main           # ROS 2 Humble / Jazzy
 git checkout noetic-devel   # ROS 1 Noetic
 ```
 
-Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환경을 위해 계속 유지합니다. 새로 시작하는 환경이라면 `main`을 권합니다.
+Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1을 쓰는 환경을 위해 계속 유지합니다. 새로 시작하는 환경이라면 `main`을 권장합니다.
+
+`geometry`와 `spline`은 ROS 클라이언트 라이브러리를 전혀 include하지 않으므로, 알고리즘 코드 자체는 두 브랜치가 사실상 같습니다.
+
+인지 결과 메시지 패키지 `cyber_perception_msgs`가 먼저 준비되어 있어야 합니다. 이 SW는 원본 기록을 **읽기만 할 뿐 수정하지 않습니다.**
 
 ---
 
 ## 목차
 
-- [이 도구가 푸는 문제](#이-도구가-푸는-문제)
-- [파이프라인 내 위치](#파이프라인-내-위치)
+- [이 SW를 통해 제공하고자 하는 기능](#이-SW를-통해-제공하고자-하는-기능)
 - [아키텍처](#아키텍처)
 - [동작 원리](#동작-원리)
-- [설치 및 빌드](#설치-및-빌드)
+- [설치](#설치)
 - [사용법](#사용법)
 - [파라미터](#파라미터)
 - [인터페이스](#인터페이스)
@@ -62,27 +47,25 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1 자산을 쓰는 환
 
 ---
 
-## 이 도구가 푸는 문제
+## 이 SW를 통해 제공하고자 하는 기능
 
-자율주행 차량의 인지 모듈은 객체가 다른 차량에 가려지거나 센서 시야를 벗어나면 트랙을 잃습니다. 다시 보이는 순간 그 객체는 **새로운 track ID**로 등록됩니다.
+자율주행 차량의 인지 모듈은 객체가 다른 차량에 가려지거나 센서 시야를 벗어나면 트랙을 잃습니다. 다시 보이는 순간 그 객체는 **새로운 track ID**로 등록됩니다. 기록된 데이터를 그대로 분석하면 아래와 같은 문제가 생깁니다.
 
-기록된 bag을 그대로 분석하면 이 현상이 다음 문제를 만듭니다.
+- 하나의 차량이 여러 개의 짧은 궤적으로 쪼개져 **거동 분석·지표 산출이 왜곡**
+- 시뮬레이터로 상황을 재현하면 객체가 **사라졌다가 다른 위치에서 재생성**
+- 레이블링 자동화의 입력으로 쓸 때 동일 객체가 **다른 개체로 집계**
 
-- 하나의 차량이 여러 개의 짧은 궤적으로 쪼개져 **거동 분석·지표 산출이 왜곡**됨
-- 시뮬레이터로 상황을 재현하면 객체가 **사라졌다가 다른 위치에서 튀어나옴**
-- 레이블링 자동화의 입력으로 쓸 때 동일 객체가 **다른 개체로 집계**됨
-
-이 도구는 원본 bag을 건드리지 않고, 끊어진 두 트랙을 하나로 잇고 그 사이를 채운 새 bag을 만들어 이 문제를 제거합니다.
+이 SW는 원본 기록을 건드리지 않고, 끊어진 두 트랙을 하나로 잇고 그 사이를 채운 새 기록을 생성하여 이 문제를 제거합니다.
 
 ```
-입력 bag           트랙 39 ──────╴          ╶────── 트랙 71
-                              (가림 구간, 8프레임)
+입력           트랙 39 ──────╴          ╶────── 트랙 71
+                          (가림 구간, 8프레임)
 
-출력 bag           트랙 39 ──────·····················──────
-                              (보간된 자세)          ID 통일
+출력           트랙 39 ──────·····················──────
+                          (보간된 자세)          ID 통일
 ```
 
-## 파이프라인 내 위치
+## 아키텍처
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{
@@ -110,20 +93,26 @@ flowchart TD
     class drive,bridge,sim step
 ```
 
-두 번째 단계는 별도 저장소인 [driving-scene-replay](https://github.com/keti-mobility/driving-scene-replay)에 있습니다. 두 저장소는 코드를 공유하지 않고 **토픽·메시지 계약만 공유**합니다.
+상기 구조에서 뒷 단계인 복원된 주행 데이터를 시뮬레이터에 재현하는 기술은 별도 저장소인 [driving-scene-replay](https://github.com/keti-mobility/driving-scene-replay)에 있습니다. 두 저장소는 코드를 공유하지 않고 **토픽·메시지 계약만 공유**합니다.
 
-## 아키텍처
-
-의존 방향은 항상 아래(도메인)를 향합니다. `geometry`와 `spline`은 ROS를 전혀 모르며, 그래서 ROS 없이 빌드하고 테스트할 수 있습니다.
+본 SW에서 제공하는 부분은 상기 파이프라인에서 파란색 박스에 해당하는 것이며, 기록된 주행 데이터의 궤적을 복원하는 전처리입니다.
 
 <img src="docs/architecture.png" width="820"
      alt="driving-trajectory-repair 계층 구조: 실행 파일 → 어댑터 → 도메인 → ROS 의존이 없는 geometry/spline 코어">
 
-| 빌드 타깃 | 내용 | 외부 의존 |
+의존 방향은 항상 아래(도메인)를 향하며, 아래 계층은 위를 모릅니다.
+
+| 빌드 타깃 | 책임 | 외부 의존 |
 |---|---|---|
-| `driving_trajectory_repair_geometry` | 기하 연산, CTRV/선형 운동 모델, 곡선 피팅 | Eigen3만 (ROS 없음) |
-| `driving_trajectory_repair_core` | 메시지 변환, 트랙 보정, bag 입출력 | rclcpp, rosbag2_cpp, 인지 메시지 |
-| `driving_trajectory_repair_viz` | rviz 마커 생성 | visualization_msgs |
+| `driving_trajectory_repair_geometry` | 기하 연산, 운동 모델, 곡선 피팅 | Eigen3만 (ROS 없음) |
+| `driving_trajectory_repair_core` | 메시지 변환, 트랙 보정, 기록 입출력 | rclcpp, rosbag2_cpp, 인지 메시지 |
+| `driving_trajectory_repair_viz` | rviz2 마커 생성 | visualization_msgs |
+
+| 실행 파일 | 책임 |
+|---|---|
+| `repair_trajectory` | 기록을 읽어 궤적을 복원한 새 기록 생성 (배치 실행) |
+| `estimation_visualizer` | 사라진 트랙의 예측 자세를 rviz2로 확인 |
+| `repaired_trajectory_visualizer` | 복원된 기록의 객체를 rviz2로 확인 |
 
 ## 동작 원리
 
@@ -190,7 +179,7 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 
 `id_matching` 체인을 따라가 재식별된 트랙의 ID를 인지가 처음 부여한 ID로 되돌립니다. 한 트랙이 여러 번 끊겼다 이어질 수 있으므로 체인을 반복 추적하되, 순환이 생겨도 멈추도록 최대 64회로 제한합니다.
 
-## 설치 및 빌드
+## 설치
 
 ### 요구사항
 
@@ -198,10 +187,12 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 |---|---|---|
 | Ubuntu | 22.04 | 24.04 |
 | C++ | 17 | 17 |
-| 기본 bag 저장 형식 | sqlite3 | mcap |
+| 기본 기록 저장 형식 | sqlite3 | mcap |
 
 - CMake ≥ 3.8, Eigen3
-- 비공개 메시지 패키지 (위 [빌드 전제조건](#-먼저-읽어주세요--빌드-전제조건) 참고)
+- 비공개 메시지 패키지 `cyber_perception_msgs` (아래 [인터페이스](#인터페이스)의 필드 명세 참고)
+
+이전 버전은 QP 스플라인 솔버(`utils`/`planner`)와 `jsk_recognition_msgs`에도 의존했습니다. 전자는 자체 최소제곱 구현으로 대체했고 후자는 표준 `visualization_msgs`로 바꿔서, **비공개 의존이 메시지 하나로 줄었습니다.**
 
 ### 빌드
 
@@ -215,11 +206,11 @@ colcon build
 source install/setup.bash
 ```
 
-ROS 1 Noetic 환경이면 `git checkout noetic-devel` 후 `catkin_make`를 쓰십시오. 기능과 파라미터는 동일합니다.
+ROS 1 Noetic 환경이면 `git checkout noetic-devel` 후 `catkin_make`를 쓰면 됩니다. 기능과 파라미터는 동일합니다.
 
 ### 기하 모듈만 검증하기 (의존성 불필요)
 
-ROS나 비공개 패키지 없이도 핵심 알고리즘을 확인할 수 있습니다.
+`driving_trajectory_repair_geometry`는 ROS·비공개 의존이 전혀 없어, 메시지 패키지 없이도 핵심 알고리즘을 확인할 수 있습니다.
 
 ```bash
 sudo apt install libgtest-dev libeigen3-dev g++
@@ -233,11 +224,11 @@ g++ -std=c++17 -I include -I /usr/include/eigen3 \
 ./test_geometry      # 34 tests
 ```
 
-colcon 워크스페이스 안에서는 `colcon test --packages-select driving_trajectory_repair`로도 실행됩니다. 이 검사는 CI에서도 매 PR마다 돌아갑니다.
+colcon 워크스페이스 안에서는 `colcon test --packages-select driving_trajectory_repair`로도 실행됩니다. 이 검사는 CI에서 매 PR마다 돌아갑니다.
 
 ## 사용법
 
-### bag 복원
+### 1. 궤적 복원
 
 ```bash
 # launch 사용 (권장 — 파라미터 파일이 함께 적용됨)
@@ -248,43 +239,40 @@ ros2 run driving_trajectory_repair repair_trajectory /path/to/recording \
     --ros-args --params-file config/driving_trajectory_repair.yaml
 ```
 
-ROS 2 bag은 파일이 아니라 **디렉터리**입니다. 경로에 확장자를 붙이지 마십시오.
+ROS 2 기록은 파일이 아니라 **디렉터리**이므로, 경로에 확장자를 붙이면 안 됩니다.
 
-출력 두 개가 생성됩니다. **원본 bag은 수정되지 않습니다.**
+### 2. 출력 확인
+
+출력 두 개가 생성되며, **원본은 수정되지 않습니다.**
 
 | 디렉터리 | 내용 |
 |---|---|
 | `recording_repaired/` | 원본의 모든 토픽 + 복원된 `/obstacles` |
 | `recording_repaired_interpolated_only/` | 합성된 자세만 (`/obstacles_modified`) |
 
-복원 대상이 아닌 토픽은 **역직렬화 없이 바이트 그대로 복사**되므로, 그 토픽들의 메시지 정의가 없어도 동작합니다. 접미사는 두 번째 인자로 바꿀 수 있습니다.
+복원 대상이 아닌 토픽은 **역직렬화 없이 바이트 그대로 복사**되므로, 그 토픽들의 메시지 정의가 없어도 동작합니다. 접미사는 두 번째 인자로 변경할 수 있습니다.
 
 실행이 끝나면 처리 통계가 출력됩니다.
 
 ```
-[ INFO] repairing /data/recording.bag
-[ INFO] wrote /data/recording_repaired.bag and /data/recording_repaired_interpolated_only.bag
-[ INFO] messages: 148203, obstacle frames: 4512, duplicate frames skipped: 37
-[ INFO] re-identified tracks: 63, interpolated poses: 412
+[INFO] repairing /data/recording
+[INFO] wrote /data/recording_repaired and /data/recording_repaired_interpolated_only
+[INFO] messages: 148203, obstacle frames: 4512, duplicate frames skipped: 37
+[INFO] re-identified tracks: 63, interpolated poses: 412
 ```
 
-### rviz로 확인
+### 3. rviz2로 확인
 
 ```bash
 ros2 launch driving_trajectory_repair visualize.launch.py x_offset:=332950.0 y_offset:=4140495.0
 ros2 bag play recording_repaired
 ```
 
-`x_offset`/`y_offset`은 그려지는 모든 좌표에서 빼는 값입니다. 지도 좌표가 UTM 미터라 rviz의 float32 변환에서 정밀도를 잃기 때문에, 장면 근처의 한 점을 넣습니다.
-
-| 노드 | 보여주는 것 |
-|---|---|
-| `estimation_visualizer` | 사라진 트랙의 **예측 자세** — 복원 전에 운동 모델을 검증 |
-| `repaired_trajectory_visualizer` | 복원된 bag의 객체 — 박스, 클래스, ID, 진행/속도/가속도 화살표 |
+`x_offset`/`y_offset`은 그려지는 모든 좌표에서 빼는 값입니다. 지도 좌표가 UTM 미터라 rviz2의 float32 변환에서 정밀도를 잃기 때문에, 장면 근처의 한 점을 넣어야 합니다.
 
 ## 파라미터
 
-전부 [`config/driving_trajectory_repair.yaml`](src/driving_trajectory_repair/config/driving_trajectory_repair.yaml)에 있으며 launch가 private 네임스페이스로 올립니다.
+전부 [`config/driving_trajectory_repair.yaml`](src/driving_trajectory_repair/config/driving_trajectory_repair.yaml)에 있으며 ROS 2 파라미터 파일이므로 `/**: ros__parameters:` 아래에 놓입니다.
 
 ### 재식별 게이팅
 
@@ -326,21 +314,24 @@ ros2 bag play recording_repaired
 
 | 노드 | 방향 | 토픽 | 타입 |
 |---|---|---|---|
-| `driving_trajectory_repair` | bag 읽기 | `/obstacles` | `cyber_perception_msgs/msg/PerceptionObstacles` |
-| `driving_trajectory_repair` | bag 쓰기 | `/obstacles`, `/obstacles_modified` | 〃 |
-| `estimation_visualizer` | 구독 | `obstacles` | 〃 |
-| `estimation_visualizer` | 발행 | `obstacles_estimation_vis` | `visualization_msgs/msg/MarkerArray` |
-| `repaired_trajectory_visualizer` | 구독 | `obstacles_modified` | `cyber_perception_msgs/msg/PerceptionObstacles` |
-| `repaired_trajectory_visualizer` | 발행 | `obstacles_vis_modified` | `visualization_msgs/msg/MarkerArray` |
-| `repaired_trajectory_visualizer` | 발행 | `obstacles_vis_velocity`, `obstacles_vis_acceleration` | 〃 |
+| `repair_trajectory` | 기록 읽기 | `/obstacles` | `cyber_perception_msgs/msg/PerceptionObstacles` |
+| `repair_trajectory` | 기록 쓰기 | `/obstacles`, `/obstacles_modified` | 〃 |
+| `estimation_visualizer` | Subscribe | `obstacles` | 〃 |
+| `estimation_visualizer` | Publish | `obstacles_estimation_vis` | `visualization_msgs/msg/MarkerArray` |
+| `repaired_trajectory_visualizer` | Subscribe | `obstacles_modified` | `cyber_perception_msgs/msg/PerceptionObstacles` |
+| `repaired_trajectory_visualizer` | Publish | `obstacles_vis_modified`, `obstacles_vis_velocity`, `obstacles_vis_acceleration` | `visualization_msgs/msg/MarkerArray` |
 
-마커는 `footprint` / `text` / `arrow` 네임스페이스로 나뉘어 있어 rviz2에서 따로 켜고 끌 수 있습니다. 구독은 모두 **sensor data QoS(best effort)** 입니다 — `ros2 bag play`가 기록된 프로파일로 재발행하므로 reliable 구독은 매칭되지 않습니다.
+마커는 `footprint` / `text` / `arrow` 네임스페이스로 나뉘어 있어 rviz2에서 따로 켜고 끌 수 있습니다.
+
+두 subscriber 모두 **best effort QoS**입니다. `ros2 bag play`는 기록된 프로파일로 재발행하는데, reliable 구독은 best effort 발행자와 매칭되지 않아 아무것도 받지 못하기 때문입니다.
 
 ### 의존 메시지 명세
 
-`cyber_perception_msgs`는 공개 배포되지 않습니다. 아래는 이 패키지가 **실제로 읽고 쓰는 필드**로, 동등한 메시지를 직접 정의할 때의 명세입니다. 사용처는 [`src/ros/obstacle_conversion.cc`](src/driving_trajectory_repair/src/ros/obstacle_conversion.cc) 한 곳에 모여 있으므로, 다른 메시지로 교체하려면 그 파일만 고치면 됩니다.
+인지 결과 메시지는 패키지에 포함하여 배포되지 않습니다. 아래는 이 SW에서 **실제로 읽고 쓰는 필드**로, 아래 메시지를 참고하여 직접 정의하여야 합니다. 복원하고자 하는 도로 이용자의 위치·자세·크기·종류 정보를 정의하여 해당 정보 중 필요한 부분을 반드시 맵핑하여 사용하는 것을 권장합니다.
 
-**`PerceptionObstacles`**
+사용처는 [`src/ros/obstacle_conversion.cc`](src/driving_trajectory_repair/src/ros/obstacle_conversion.cc) 한 곳에 모여 있으므로, 다른 메시지로 교체하려면 그 파일만 수정하면 됩니다.
+
+**예시) **`PerceptionObstacles`**
 
 | 필드 | 타입 | 의미 |
 |---|---|---|
@@ -408,27 +399,27 @@ ROS 1 브랜치를 계속 쓰면서 이 의존을 없애려면, 해당 브랜치
 
 **빌드**
 
-- **비공개 의존성이 `cyber_perception_msgs` 하나로 줄었습니다.** 위 명세대로 동등한 메시지를 정의하면 빌드됩니다. 최소 msgs 패키지 동봉이 후속 작업입니다.
-- **ROS 2 판은 실제 장비 데이터로 재검증되지 않았습니다.** 알고리즘 계층은 단위 테스트 34개로 덮여 있고 전 소스가 ROS 2 헤더에 대해 컴파일되지만, 실제 bag을 통과시킨 회귀 비교는 아직 하지 않았습니다. 실차 데이터로 검증된 결과가 필요하면 `noetic-devel`(ROS 1) 브랜치를 쓰십시오.
+- **비공개 의존이 `cyber_perception_msgs` 하나로 줄었습니다.** 위 명세대로 동등한 메시지를 정의하면 빌드됩니다. 최소 msgs 패키지 동봉이 후속 작업입니다.
+- **ROS 2 판은 실제 장비 데이터로 재검증되지 않았습니다.** 알고리즘 계층은 단위 테스트 34개로 덮여 있고 전 소스가 ROS 2 헤더에 대해 컴파일되지만, 실제 기록을 통과시킨 회귀 비교는 아직 하지 않았습니다. 실차 데이터로 검증된 결과가 필요하면 `noetic-devel`(ROS 1) 브랜치를 쓰면 됩니다.
 - **두 브랜치는 별도로 관리됩니다.** 알고리즘 수정은 양쪽에 반영해야 하며, 현재는 수동으로 합니다.
 
 **알고리즘**
 
 - **탐욕적 매칭**입니다. 전역 최적 할당(헝가리안 등)이 아니므로, 비슷한 점수의 후보가 밀집한 혼잡 장면에서는 최적이 아닌 짝이 선택될 수 있습니다.
-- **오프라인 전용**입니다. `driving_trajectory_repair`는 전체 프레임을 메모리에 올린 뒤 보간하므로, 긴 녹화에서는 메모리 사용량이 프레임 수에 비례해 증가합니다. 실시간 사용 불가.
-- **정량 평가가 없습니다.** 재식별 정확도(precision/recall)를 측정한 결과가 아직 없어, 파라미터 기본값은 실제 녹화 데이터에 대한 육안 검증으로 정해졌습니다. 다른 인지 스택·다른 주행 환경에서는 재조정이 필요할 수 있습니다.
-- **z 좌표는 보간하지 않습니다.** 보간 자세의 높이는 시작 객체의 값을 그대로 씁니다. 경사로·고가도로 구간에서는 부정확할 수 있습니다.
+- **오프라인 전용**입니다. 전체 프레임을 메모리에 올린 뒤 보간하므로, 긴 기록에서는 메모리 사용량이 프레임 수에 비례해 증가합니다. 실시간 사용은 불가합니다.
+- **정량 평가가 없습니다.** 재식별 정확도(precision/recall)를 측정한 결과가 아직 없어, 파라미터 기본값은 실제 기록에 대한 육안 검증으로 정해졌습니다. 다른 인지 스택·다른 주행 환경에서는 재조정이 필요할 수 있습니다.
+- **z 좌표는 보간하지 않습니다.** 보간 자세의 높이는 시작 객체의 값을 그대로 사용하므로, 경사로·고가도로 구간에서는 부정확할 수 있습니다.
 - 가속도는 보간 자세에 채워지지 않아 0으로 남습니다.
 
 **테스트**
 
-- 자동 테스트는 기하 연산과 운동 모델(23개)만 덮습니다. `TrackRepairer`의 매칭· 보간 경로와 bag 입출력은 아직 테스트가 없으며, 실제 bag으로 수동 검증합니다.
+- 자동 테스트는 기하 연산·운동 모델·곡선 피팅(34개)만 덮습니다. `TrackRepairer`의 매칭·보간 경로와 기록 입출력은 아직 테스트가 없으며, 실제 기록으로 수동 검증합니다.
 
 ## 인용
 
 ```bibtex
-@software{keti_ros_driving_trajectory_repair,
-  title  = {driving-trajectory-repair: Trajectory repair for recorded autonomous driving perception data},
+@software{keti_driving_trajectory_repair,
+  title  = {driving-trajectory-repair: Trajectory repair for recorded autonomous driving data},
   author = {{Korea Electronics Technology Institute}},
   year   = {2026},
   url    = {https://github.com/keti-mobility/driving-trajectory-repair},
