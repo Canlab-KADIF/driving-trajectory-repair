@@ -14,8 +14,8 @@
   <author email="youngbo.shim@keti.re.kr">Youngbo Shim</author>
   <license>Apache-2.0</license>
 
-  <url type="repository">https://github.com/keti-mobility/driving-trajectory-repair</url>
-  <url type="bugtracker">https://github.com/keti-mobility/driving-trajectory-repair/issues</url>
+  <url type="repository">https://github.com/Canlab-KADIF/driving-trajectory-repair</url>
+  <url type="bugtracker">https://github.com/Canlab-KADIF/driving-trajectory-repair/issues</url>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

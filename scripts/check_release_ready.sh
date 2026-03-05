@@ -153,9 +153,9 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fail 'commit history contains personal email addresses (history rewrite required)'
     printf '         %s\n' "${bad_authors}"
   fi
-  remotes="$(git remote -v | grep -E 'gitlab\.com' || true)"
+  remotes="$(git remote get-url origin 2>/dev/null | grep -E 'gitlab\.com' || true)"
   if [[ -n "${remotes}" ]]; then
-    warn "internal GitLab remote still configured (rename it to 'internal' before publishing)"
+    warn "origin still points at the internal GitLab (rename it to 'internal' before publishing)"
     printf '         %s\n' "${remotes}" | head -n 2
   else
     pass 'no internal GitLab remote configured as origin'

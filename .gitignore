@@ -27,3 +27,6 @@ __pycache__/
 # local overrides
 *.local.yaml
 compile_commands.json
+
+# figure source, regenerated locally into docs/architecture.png
+docs/architecture.html

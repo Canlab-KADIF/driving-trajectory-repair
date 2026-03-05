@@ -5,7 +5,7 @@
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy-22314E.svg)](https://docs.ros.org)
 [![tests](https://img.shields.io/badge/tests-34%20passing-brightgreen.svg)](#기하-모듈만-검증하기-의존성-불필요)
 
-자율주행 차량에서 취득된 주행 데이터 중 인지 결과의 **끊어진 도로 이용자(차량, 보행자, 자전거 등) 궤적을 복원**하는 오프라인 SW입니다. 인지 모듈이 가림·센서 사각으로 트랙을 놓쳤다가 새로운 ID로 다시 잡은 구간을 재식별하고, 그 사이 빈 구간을 스플라인으로 보간해 하나의 연속된 궤적으로 되돌리는 전처리 SW 입니다.
+자율주행 차량에서 취득된 주행 데이터 중 인지 결과의 **끊어진 도로 이용자(차량, 보행자, 자전거 등) 궤적을 복원**하는 오프라인 SW입니다. 인지 모듈이 타 객체에 가려지거나(occlusion), 미인식/오인식으로 트랙을 놓쳤다가 새로운 ID로 다시 잡은 구간을 재식별하고, 그 사이 빈 구간을 보간해 하나의 연속된 궤적으로 복원하는 전처리 SW 입니다.
 
 > **English** - An offline tool that repairs broken object-tracking trajectories in recorded driving data. When a perception stack loses a track through occlusion and re-acquires it under a fresh id, downstream analysis sees two short trajectories instead of one. This tool re-identifies the pair and fills the gap with spline-interpolated poses, producing a recording that can be replayed as a continuous driving scenario.
 
@@ -27,8 +27,6 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1을 쓰는 환경을 
 
 `geometry`와 `spline`은 ROS 클라이언트 라이브러리를 전혀 include하지 않으므로, 알고리즘 코드 자체는 두 브랜치가 사실상 같습니다.
 
-인지 결과 메시지 패키지 `cyber_perception_msgs`가 먼저 준비되어 있어야 합니다. 이 SW는 원본 기록을 **읽기만 할 뿐 수정하지 않습니다.**
-
 ---
 
 ## 목차
@@ -40,7 +38,6 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1을 쓰는 환경을 
 - [사용법](#사용법)
 - [파라미터](#파라미터)
 - [인터페이스](#인터페이스)
-- [제약사항 및 알려진 이슈](#제약사항-및-알려진-이슈)
 - [인용](#인용)
 - [라이선스](#라이선스)
 - [사사](#사사)
@@ -49,13 +46,14 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1을 쓰는 환경을 
 
 ## 이 SW를 통해 제공하고자 하는 기능
 
-자율주행 차량의 인지 모듈은 객체가 다른 차량에 가려지거나 센서 시야를 벗어나면 트랙을 잃습니다. 다시 보이는 순간 그 객체는 **새로운 track ID**로 등록됩니다. 기록된 데이터를 그대로 분석하면 아래와 같은 문제가 생깁니다.
+자율주행 차량의 인지 모듈은 객체가 다른 차량에 가려지거나 미인식, 오인식되면 추적하던 객체를 잃습니다. 다시 보이는 순간 그 객체는 **새로운 track ID**로 등록됩니다. 이 SW를 통해서 주행 궤적을 재생성하지 않으면 재현 시 아래와 같은 문제가 발생할 수 있습니다.
 
 - 하나의 차량이 여러 개의 짧은 궤적으로 쪼개져 **거동 분석·지표 산출이 왜곡**
 - 시뮬레이터로 상황을 재현하면 객체가 **사라졌다가 다른 위치에서 재생성**
 - 레이블링 자동화의 입력으로 쓸 때 동일 객체가 **다른 개체로 집계**
 
-이 SW는 원본 기록을 건드리지 않고, 끊어진 두 트랙을 하나로 잇고 그 사이를 채운 새 기록을 생성하여 이 문제를 제거합니다.
+아래는 본 SW를 통해서 주행 궤적이 재생성되는 예시이며, 입출력은 같은 포맷으로 주행 데이터를 재생성합니다.
+
 
 ```
 입력           트랙 39 ──────╴          ╶────── 트랙 71
@@ -67,64 +65,39 @@ Noetic은 2025년 5월에 EOL이 되었지만, 기존 ROS 1을 쓰는 환경을 
 
 ## 아키텍처
 
-```mermaid
-%%{init: {"theme":"base","themeVariables":{
-  "lineColor":"#1F2937","edgeLabelBackground":"#FFFFFF",
-  "fontFamily":"-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"}}}%%
-flowchart TD
-    drive["실차 주행<br/>트리거 발생 시 동기 로깅"]
-    raw[("recording/<br/>원본 기록")]
-    fix["driving-trajectory-repair<br/>트랙 재식별 · 궤적 보간"]
-    fixed[("recording_repaired/<br/>복원된 기록")]
-    bridge["driving-scene-replay<br/>액터 생성 · 이동 · 소멸"]
-    sim(["KADIF 시뮬레이터<br/>재현 장면"])
+<img src="docs/driving_trajectory_repair_in_architecture.png" width="820">
 
-    drive --> raw
-    raw --> fix
-    fix --> fixed
-    fixed -- "ros2 bag play" --> bridge
-    bridge --> sim
+상기 구조에서 복원된 주행 데이터를 시뮬레이터에 재현하는 기술은 별도 저장소인 [driving-scene-replay](https://github.com/Canlab-KADIF/driving-scene-replay)에 있습니다. 
 
-    classDef here fill:#2563EB,stroke:#2563EB,color:#FFFFFF
-    classDef data fill:#F3F4F6,stroke:#1F2937,color:#1F2937
-    classDef step fill:#FFFFFF,stroke:#1F2937,color:#1F2937
-    class fix here
-    class raw,fixed data
-    class drive,bridge,sim step
-```
-
-상기 구조에서 뒷 단계인 복원된 주행 데이터를 시뮬레이터에 재현하는 기술은 별도 저장소인 [driving-scene-replay](https://github.com/keti-mobility/driving-scene-replay)에 있습니다. 두 저장소는 코드를 공유하지 않고 **토픽·메시지 계약만 공유**합니다.
-
-본 SW에서 제공하는 부분은 상기 파이프라인에서 파란색 박스에 해당하는 것이며, 기록된 주행 데이터의 궤적을 복원하는 전처리입니다.
+본 SW에서 제공하는 부분은 상기 파이프라인에서 빨간색 dashed 박스에 해당하는 것이며, 로깅된 주행 데이터의 궤적을 복원하는 전처리 SW입니다.
 
 <img src="docs/architecture.png" width="820"
-     alt="driving-trajectory-repair 계층 구조: 실행 파일 → 어댑터 → 도메인 → ROS 의존이 없는 geometry/spline 코어">
+     alt="driving-trajectory-repair 구조: 실행 파일 → ROS 어댑터 → 알고리즘">
 
-의존 방향은 항상 아래(도메인)를 향하며, 아래 계층은 위를 모릅니다.
 
 | 빌드 타깃 | 책임 | 외부 의존 |
 |---|---|---|
-| `driving_trajectory_repair_geometry` | 기하 연산, 운동 모델, 곡선 피팅 | Eigen3만 (ROS 없음) |
-| `driving_trajectory_repair_core` | 메시지 변환, 트랙 보정, 기록 입출력 | rclcpp, rosbag2_cpp, 인지 메시지 |
-| `driving_trajectory_repair_viz` | rviz2 마커 생성 | visualization_msgs |
+| `driving_trajectory_repair_geometry` | 기하 연산, 운동 모델, 곡선 피팅 | Eigen3 |
+| `driving_trajectory_repair_core` | 메시지 변환, 트랙 보정, 로깅파일 입출력 | rclcpp, rosbag2_cpp, 인지 메시지 |
+| `driving_trajectory_repair_viz` | 시각화 데이터 생성 | visualization_msgs |
 
 | 실행 파일 | 책임 |
 |---|---|
-| `repair_trajectory` | 기록을 읽어 궤적을 복원한 새 기록 생성 (배치 실행) |
-| `estimation_visualizer` | 사라진 트랙의 예측 자세를 rviz2로 확인 |
-| `repaired_trajectory_visualizer` | 복원된 기록의 객체를 rviz2로 확인 |
+| `repair_trajectory` | 로깅 파일을 읽어 궤적을 복원한 새 로깅 파일 생성 |
+| `estimation_visualizer` | 사라진 트랙의 예측 자세를 시각화 |
+| `repaired_trajectory_visualizer` | 복원된 주행 궤적 객체를 시각화 |
 
 ## 동작 원리
 
-### 1단계 — 트랙 상태 추적
+### 1단계: 트랙 상태 추적
 
-bag을 프레임 순서대로 읽으며 세 집합을 유지합니다.
+로깅 데이터를 프레임 순서대로 읽으며 세 집합을 유지합니다.
 
 - **추적 중**: 현재 프레임에 있는 트랙
 - **사라진 트랙**: 직전에 있었으나 이번 프레임에 없는 트랙. 재식별 후보로 `reidentification_window`(기본 2초) 동안만 보관
 - **신규 트랙**: 이번 프레임에 처음 나타난 트랙
 
-### 2단계 — 사라진 트랙의 현재 자세 추정
+### 2단계: 사라진 트랙의 현재 자세 추정
 
 사라진 트랙이 "지금이라면 어디 있을지"를 추정합니다. 세 모델을 순서대로 적용합니다.
 
@@ -143,16 +116,16 @@ CTRV 변위:
 
 `v`는 이력 구간 평균 속력, `ω`는 이력 처음↔끝 heading 차이를 시간으로 나눈 값입니다.
 
-### 3단계 — 재식별 매칭
+### 3단계: 재식별 매칭
 
-신규 트랙 × 사라진 트랙의 모든 조합에 대해 **게이팅 후 점수화**합니다.
+신규 트랙과 사라진 트랙의 모든 조합에 대해 **게이팅 후 점수화**합니다.
 
 **게이팅** (하나라도 실패하면 후보 탈락)
 
 - 객체 종류(`type.type`)가 동일할 것
 - 추정 박스와 신규 박스가 실제로 겹칠 것 (분리축 정리)
 - heading 차이 < `max_heading_error` (기본 π/2)
-- 속력 차이 < `max_speed_error` (기본 13.9 m/s = 50 km/h)
+- 속력 차이 < `max_speed_error` (기본 13.9 m/s = 50 km/h, 도심 데이터 기준 파라미터)
 
 **점수**
 
@@ -164,18 +137,18 @@ similarity = IoU
 
 IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 부족을 절반까지만 보상합니다. 점수가 높은 쌍부터 **탐욕적으로** 확정하며, 신규·사라진 트랙 모두 최대 한 번만 매칭됩니다.
 
-### 4단계 — 갭 보간
+### 4단계: 보간
 
 매칭된 쌍의 시작 자세와 끝 자세 사이를 채웁니다.
 
-1. 두 끝점의 heading 차이로 **직선/원호**를 판정하고, 원호면 현 길이와 사잇각으로 반지름과 각속도를 구합니다
-2. 그 등회전율 모델로 중간 프레임마다 **제어점**을 생성합니다
-3. 제어점들을 균일 3차 B-스플라인으로 **벌점 최소제곱** 피팅합니다. 중간 제어점은 데이터로 들어가고 계수의 2차·3차 차분에 벌점을 주며, 양 끝점은 실제 관측값이므로 위치와 접선을 KKT 등식제약으로 **정확히** 고정합니다
-4. 피팅된 곡선 위의 점을 각 프레임의 보간 자세로 기록합니다
+1. 두 끝점의 heading 차이로 **직선/원호**를 판정하고, 원호면 현 길이와 사잇각으로 반지름과 각속도를 계산
+2. 그 등속(원)운동 모델로 중간 프레임마다 **제어점**을 생성
+3. 제어점들을 균일 3차 B-스플라인으로 **패널티 최소제곱** 피팅, 중간 제어점은 데이터로 들어가고 계수의 2차·3차 차분에 패널티를 주며, 양 끝점은 실제 관측값이므로 위치와 접선을 KKT 등식제약으로 고정
+4. 피팅된 곡선 위의 점을 각 프레임의 보간 자세로 기록
 
-진행 방향이 heading과 150° 이상 어긋나면 후진으로 판정해 접선을 뒤집습니다. 후진하는 차량을 앞으로 돌려세우느라 곡선이 크게 휘는 것을 막습니다.
+진행 방향이 heading과 150° 이상 어긋나면 후진으로 판정해 접선을 반대로 회전시킵니다. 후진하는 차량을 앞으로 돌려 추종하면서 발생하는 문제인 곡선이 크게 휘는 것을 방지합니다.
 
-### 5단계 — ID 통일
+### 5단계: 식별자 재부여
 
 `id_matching` 체인을 따라가 재식별된 트랙의 ID를 인지가 처음 부여한 ID로 되돌립니다. 한 트랙이 여러 번 끊겼다 이어질 수 있으므로 체인을 반복 추적하되, 순환이 생겨도 멈추도록 최대 64회로 제한합니다.
 
@@ -190,14 +163,11 @@ IoU 가중치가 암묵적으로 1이므로, heading·속력 일치가 겹침 �
 | 기본 기록 저장 형식 | sqlite3 | mcap |
 
 - CMake ≥ 3.8, Eigen3
-- 비공개 메시지 패키지 `cyber_perception_msgs` (아래 [인터페이스](#인터페이스)의 필드 명세 참고)
-
-이전 버전은 QP 스플라인 솔버(`utils`/`planner`)와 `jsk_recognition_msgs`에도 의존했습니다. 전자는 자체 최소제곱 구현으로 대체했고 후자는 표준 `visualization_msgs`로 바꿔서, **비공개 의존이 메시지 하나로 줄었습니다.**
 
 ### 빌드
 
 ```bash
-git clone https://github.com/keti-mobility/driving-trajectory-repair.git
+git clone https://github.com/Canlab-KADIF/driving-trajectory-repair.git
 cd driving-trajectory-repair
 
 # 비공개 메시지 패키지를 src/ 아래에 함께 두어야 합니다
@@ -210,7 +180,7 @@ ROS 1 Noetic 환경이면 `git checkout noetic-devel` 후 `catkin_make`를 쓰�
 
 ### 기하 모듈만 검증하기 (의존성 불필요)
 
-`driving_trajectory_repair_geometry`는 ROS·비공개 의존이 전혀 없어, 메시지 패키지 없이도 핵심 알고리즘을 확인할 수 있습니다.
+`driving_trajectory_repair_geometry`는 ROS 등의 의존성이 전혀 없어, 메시지 패키지 없이도 핵심 알고리즘을 확인할 수 있습니다.
 
 ```bash
 sudo apt install libgtest-dev libeigen3-dev g++
@@ -231,7 +201,7 @@ colcon 워크스페이스 안에서는 `colcon test --packages-select driving_tr
 ### 1. 궤적 복원
 
 ```bash
-# launch 사용 (권장 — 파라미터 파일이 함께 적용됨)
+# launch 사용 (권장: 파라미터 파일이 함께 적용됨)
 ros2 launch driving_trajectory_repair repair_trajectory.launch.py bag:=/path/to/recording
 
 # 직접 실행
@@ -239,7 +209,7 @@ ros2 run driving_trajectory_repair repair_trajectory /path/to/recording \
     --ros-args --params-file config/driving_trajectory_repair.yaml
 ```
 
-ROS 2 기록은 파일이 아니라 **디렉터리**이므로, 경로에 확장자를 붙이면 안 됩니다.
+ROS2 로깅 데이터는 파일이 아니라 **폴더**이므로, 경로에 확장자를 붙이면 안 됩니다.
 
 ### 2. 출력 확인
 
@@ -248,13 +218,14 @@ ROS 2 기록은 파일이 아니라 **디렉터리**이므로, 경로에 확장�
 | 디렉터리 | 내용 |
 |---|---|
 | `recording_repaired/` | 원본의 모든 토픽 + 복원된 `/obstacles` |
-| `recording_repaired_interpolated_only/` | 합성된 자세만 (`/obstacles_modified`) |
+| `recording_repaired_interpolated_only/` | 복원된 자세만 (`/obstacles_modified`) |
 
-복원 대상이 아닌 토픽은 **역직렬화 없이 바이트 그대로 복사**되므로, 그 토픽들의 메시지 정의가 없어도 동작합니다. 접미사는 두 번째 인자로 변경할 수 있습니다.
+복원 대상이 아닌 토픽은 **deserialization 없이 바이트 그대로 복사**되므로, 그 토픽들의 메시지 정의가 없어도 동작
 
-실행이 끝나면 처리 통계가 출력됩니다.
+실행이 끝나면 처리 결과가 출력됩니다.
 
 ```
+예시)
 [INFO] repairing /data/recording
 [INFO] wrote /data/recording_repaired and /data/recording_repaired_interpolated_only
 [INFO] messages: 148203, obstacle frames: 4512, duplicate frames skipped: 37
@@ -268,7 +239,7 @@ ros2 launch driving_trajectory_repair visualize.launch.py x_offset:=332950.0 y_o
 ros2 bag play recording_repaired
 ```
 
-`x_offset`/`y_offset`은 그려지는 모든 좌표에서 빼는 값입니다. 지도 좌표가 UTM 미터라 rviz2의 float32 변환에서 정밀도를 잃기 때문에, 장면 근처의 한 점을 넣어야 합니다.
+`x_offset`/`y_offset`은 그려지는 모든 좌표에서 빼는 값입니다. 지도 좌표가 UTM 미터라 rviz2의 float32 변환에서 정밀도를 잃기 때문에, 주행 데이터에 들어있는 자차의 좌표 중 한 점을 넣는 것을 권장합니다.
 
 ## 파라미터
 
@@ -284,21 +255,21 @@ ros2 bag play recording_repaired
 | `heading_similarity_weight` | `0.5` | 점수에서 heading 항의 가중치 |
 | `speed_similarity_weight` | `0.5` | 점수에서 속력 항의 가중치 |
 
-### 운동 모델
+### CTRV 모델
 
 | 파라미터 | 기본값 | 의미 |
 |---|---|---|
 | `stationary_speed_threshold` | `0.83` m/s | 이 아래는 정지로 보고 자세 유지 (3 km/h) |
 | `history_size` | `10` | 트랙당 보관 샘플 수. 클수록 회전율 추정이 매끄럽지만 실제 선회에 늦게 반응 |
 
-### 갭 보간
+### 보간
 
 | 파라미터 | 기본값 | 의미 |
 |---|---|---|
 | `spline_segment_count` | `8` | 곡선을 이루는 구간 수. 많을수록 제어점을 가깝게 따라가고 덜 매끄러움 |
 | `spline_fit_weight` | `1.0` | 적합 항 대 평활 항의 비중. 양 끝점은 등식제약이라 중간 제어점 추종에만 영향 |
-| `spline_second_derivative_weight` | `0.2` | 2차 차분 벌점 |
-| `spline_third_derivative_weight` | `1.0` | 3차 차분 벌점. 2차의 5배로 둬 곡률이 천천히 변하게 함. 이 값에서 20 m 호를 3 mm로 따라가면서 제어점의 30 cm 노이즈는 무시함 |
+| `spline_second_derivative_weight` | `0.2` | 2차 차분 패널티 |
+| `spline_third_derivative_weight` | `1.0` | 3차 차분 패널티, 2차의 5배로 둬 곡률이 천천히 변하게 함 |
 
 ### 입출력
 
@@ -327,7 +298,7 @@ ros2 bag play recording_repaired
 
 ### 의존 메시지 명세
 
-인지 결과 메시지는 패키지에 포함하여 배포되지 않습니다. 아래는 이 SW에서 **실제로 읽고 쓰는 필드**로, 아래 메시지를 참고하여 직접 정의하여야 합니다. 복원하고자 하는 도로 이용자의 위치·자세·크기·종류 정보를 정의하여 해당 정보 중 필요한 부분을 반드시 맵핑하여 사용하는 것을 권장합니다.
+인지 결과 메시지는 패키지에 포함하여 배포되지 않습니다. 아래는 이 SW에서 **실제로 읽고 쓰는 필드**로, 아래 메시지를 참고하여 직접 정의하여야 합니다. 복원하고자 하는 도로 이용자의 위치, 자세, 크기, 종류 정보를 정의하여 해당 정보 중 필요한 부분을 반드시 맵핑하여 사용하는 것을 권장합니다.
 
 사용처는 [`src/ros/obstacle_conversion.cc`](src/driving_trajectory_repair/src/ros/obstacle_conversion.cc) 한 곳에 모여 있으므로, 다른 메시지로 교체하려면 그 파일만 수정하면 됩니다.
 
@@ -369,52 +340,6 @@ ros2 bag play recording_repaired
 | 4 | `BICYCLE` | 일반 |
 | 5 | `VEHICLE` | 일반 |
 
-### 이전 버전의 외부 솔버 인터페이스 (참고)
-
-ROS 1 버전(`noetic-devel`)은 `utils`/`planner`가 제공하는 QP 스플라인 솔버의 다음 API를 사용했습니다. **현재 `main`에는 이 의존이 없습니다.**
-
-```cpp
-keti::planning::OsqpSpline2dSolver(const std::vector<double>& knots, int order);
-void Reset(const std::vector<double>& knots, int order);
-bool Solve();
-Spline2dConstraint* mutable_constraint();
-Spline2dKernel*     mutable_kernel();
-const Spline2d&     spline() const;   // operator()(t) -> std::pair<double,double>
-
-// Spline2dConstraint
-bool Add2dBoundary(knots, angles, ref_points, longitudinal_bound, lateral_bound);
-bool AddPointConstraint(double t, double x, double y);
-bool AddPointAngleConstraint(double t, double angle);
-bool AddSecondDerivativeSmoothConstraint();
-
-// Spline2dKernel
-void AddSecondOrderDerivativeMatrix(double weight);
-void AddThirdOrderDerivativeMatrix(double weight);
-void AddRegularization(double weight);
-```
-
-ROS 1 브랜치를 계속 쓰면서 이 의존을 없애려면, 해당 브랜치의 `src/spline/spline_solver.cc` 하나만 `main`의 구현으로 교체하면 됩니다.
-
-## 제약사항 및 알려진 이슈
-
-**빌드**
-
-- **비공개 의존이 `cyber_perception_msgs` 하나로 줄었습니다.** 위 명세대로 동등한 메시지를 정의하면 빌드됩니다. 최소 msgs 패키지 동봉이 후속 작업입니다.
-- **ROS 2 판은 실제 장비 데이터로 재검증되지 않았습니다.** 알고리즘 계층은 단위 테스트 34개로 덮여 있고 전 소스가 ROS 2 헤더에 대해 컴파일되지만, 실제 기록을 통과시킨 회귀 비교는 아직 하지 않았습니다. 실차 데이터로 검증된 결과가 필요하면 `noetic-devel`(ROS 1) 브랜치를 쓰면 됩니다.
-- **두 브랜치는 별도로 관리됩니다.** 알고리즘 수정은 양쪽에 반영해야 하며, 현재는 수동으로 합니다.
-
-**알고리즘**
-
-- **탐욕적 매칭**입니다. 전역 최적 할당(헝가리안 등)이 아니므로, 비슷한 점수의 후보가 밀집한 혼잡 장면에서는 최적이 아닌 짝이 선택될 수 있습니다.
-- **오프라인 전용**입니다. 전체 프레임을 메모리에 올린 뒤 보간하므로, 긴 기록에서는 메모리 사용량이 프레임 수에 비례해 증가합니다. 실시간 사용은 불가합니다.
-- **정량 평가가 없습니다.** 재식별 정확도(precision/recall)를 측정한 결과가 아직 없어, 파라미터 기본값은 실제 기록에 대한 육안 검증으로 정해졌습니다. 다른 인지 스택·다른 주행 환경에서는 재조정이 필요할 수 있습니다.
-- **z 좌표는 보간하지 않습니다.** 보간 자세의 높이는 시작 객체의 값을 그대로 사용하므로, 경사로·고가도로 구간에서는 부정확할 수 있습니다.
-- 가속도는 보간 자세에 채워지지 않아 0으로 남습니다.
-
-**테스트**
-
-- 자동 테스트는 기하 연산·운동 모델·곡선 피팅(34개)만 덮습니다. `TrackRepairer`의 매칭·보간 경로와 기록 입출력은 아직 테스트가 없으며, 실제 기록으로 수동 검증합니다.
-
 ## 인용
 
 ```bibtex
@@ -422,7 +347,7 @@ ROS 1 브랜치를 계속 쓰면서 이 의존을 없애려면, 해당 브랜치
   title  = {driving-trajectory-repair: Trajectory repair for recorded autonomous driving data},
   author = {{Korea Electronics Technology Institute}},
   year   = {2026},
-  url    = {https://github.com/keti-mobility/driving-trajectory-repair},
+  url    = {https://github.com/Canlab-KADIF/driving-trajectory-repair},
   note   = {Developed under IITP grant RS-2023-00232046}
 }
 ```
@@ -430,8 +355,6 @@ ROS 1 브랜치를 계속 쓰면서 이 의존을 없애려면, 해당 브랜치
 ## 라이선스
 
 [Apache License 2.0](LICENSE). 제3자 고지는 [NOTICE](NOTICE)를 참고하십시오.
-
-이전 버전은 바운딩박스 겹침 계산에 CGAL을 사용했습니다. CGAL의 Boolean set operations는 GPL로 배포되어 Apache-2.0과 호환되지 않으므로, 볼록 다각형 전용 자체 구현으로 대체했습니다.
 
 ## 사사
 
